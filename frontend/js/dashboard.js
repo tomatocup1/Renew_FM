@@ -119,13 +119,23 @@ applyCalendarStyles() {
 
     async init() {
         try {
-            console.log('Starting initialization...');
-            const isAuthed = await authService.checkAuth();
+            console.log('Starting dashboard initialization...');
+            
+            // 로컬 스토리지의 세션 정보 확인
+            const sessionData = localStorage.getItem('session');
+            console.log('Session data in localStorage:', sessionData ? '존재함' : '없음');
+            
+            // 쿠키의 세션 정보 확인
+            console.log('Cookies:', document.cookie);
+            
+            const isAuthed = await authService.isAuthenticated();
             console.log('Auth check result:', isAuthed);
             
             if (!isAuthed) {
                 console.log('Not authenticated, redirecting to login...');
-                window.location.href = '/login.html';
+                // 리다이렉트 전 현재 URL 저장
+                const returnUrl = encodeURIComponent(window.location.pathname);
+                window.location.href = `/login.html?redirect=${returnUrl}`;
                 return;
             }
     
@@ -133,7 +143,7 @@ applyCalendarStyles() {
             this.initializeDatePicker();
             this.initializeStatCards();
             this.setupScrollListener();
-            console.log('Initialization complete');
+            console.log('Dashboard initialization complete');
         } catch (error) {
             console.error('Dashboard initialization error:', error);
             if (this.initAttempts < this.maxAttempts) {

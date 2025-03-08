@@ -181,13 +181,13 @@
         <form id="loginForm">
             <div class="form-group">
                 <label for="email">이메일</label>
-                <input type="email" id="email" class="form-control" required>
+                <input type="email" id="email" class="form-control" autocomplete="email" required>
                 <div class="error-message" id="emailError"></div>
             </div>
             
             <div class="form-group">
                 <label for="password">비밀번호</label>
-                <input type="password" id="password" class="form-control" required>
+                <input type="password" id="password" class="form-control" autocomplete="current-password" required>
                 <div class="error-message" id="passwordError"></div>
             </div>
             
@@ -287,44 +287,57 @@
             }
     
             // 로그인 처리
-            async handleSubmit(e) {
-                e.preventDefault();
-                this.clearErrors();
-    
-                const email = document.getElementById('email').value;
-                const password = document.getElementById('password').value;
-    
-                // 입력값 검증
-                if (!email || !password) {
-                    this.showError('이메일과 비밀번호를 모두 입력해주세요.');
-                    return;
-                }
-    
-                try {
-                    // 로딩 상태 표시
-                    const submitButton = this.form.querySelector('button[type="submit"]');
-                    submitButton.disabled = true;
-                    submitButton.textContent = '로그인 중...';
-    
-                    // authService를 통한 로그인 시도
-                    await authService.login(email, password);
-                    
-                    // 로그인 성공 시 대시보드로 이동
-                    window.location.href = './dashboard.html';
-    
-                } catch (error) {
-                    console.error('Login error:', error);
-                    this.showError(error.message || '로그인에 실패했습니다.');
-    
-                } finally {
-                    // 로딩 상태 복원
-                    const submitButton = this.form.querySelector('button[type="submit"]');
-                    submitButton.disabled = false;
-                    submitButton.textContent = '로그인';
+                async handleSubmit(e) {
+                    e.preventDefault();
+                    this.clearErrors();
+
+                    const email = document.getElementById('email').value;
+                    const password = document.getElementById('password').value;
+
+                    // 입력값 검증
+                    if (!email || !password) {
+                        this.showError('이메일과 비밀번호를 모두 입력해주세요.');
+                        return;
+                    }
+
+                    try {
+                        // 로딩 상태 표시
+                        const submitButton = this.form.querySelector('button[type="submit"]');
+                        submitButton.disabled = true;
+                        submitButton.textContent = '로그인 중...';
+
+                        console.log('Attempting login with:', email);
+                        
+                        // authService를 통한 로그인 시도
+                        const loginResult = await authService.login(email, password);
+                        console.log('Login successful:', loginResult);
+                        
+                        // 세션이 제대로 저장되었는지 확인
+                        const sessionCheck = authService.getSession();
+                        console.log('Session after login:', sessionCheck);
+                        
+                        if (!sessionCheck) {
+                            console.error('로그인은 성공했으나 세션이 저장되지 않았습니다.');
+                            // 세션이 없더라도 진행
+                        }
+                        
+                        // 타임아웃을 통한 대시보드 리다이렉트
+                        console.log('로그인 성공, 대시보드로 리다이렉트합니다...');
+                        setTimeout(() => {
+                            window.location.href = './dashboard.html';
+                        }, 500);
+
+                    } catch (error) {
+                        console.error('Login error:', error);
+                        this.showError(error.message || '로그인에 실패했습니다.');
+                        
+                        // 로딩 상태 복원
+                        const submitButton = this.form.querySelector('button[type="submit"]');
+                        submitButton.disabled = false;
+                        submitButton.textContent = '로그인';
+                    }
                 }
             }
-        }
-    
         // 페이지 로드 시 LoginManager 초기화
         document.addEventListener('DOMContentLoaded', () => {
             new LoginManager();

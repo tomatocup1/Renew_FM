@@ -21,9 +21,11 @@ requiredEnvVars.forEach(varName => {
     }
 });
 
-// CORS 설정을 단순화하고 명확하게 수정
+// CORS 설정을 업데이트하여 Netlify 환경 지원
 const corsOptions = {
-    origin: 'http://localhost:3000',
+    origin: process.env.NODE_ENV === 'production' 
+        ? [process.env.FRONTEND_URL || 'https://your-netlify-app.netlify.app']
+        : 'http://localhost:3000',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: [

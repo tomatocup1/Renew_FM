@@ -390,23 +390,30 @@ class AuthService {
         if (!session) return;
         
         try {
+            // 로컬 스토리지에 저장
             const sessionData = JSON.stringify(session);
             localStorage.setItem('session', sessionData);
             
+            // 쿠키 설정에 SameSite=Lax 명시
             const cookieOptions = [
                 'path=/',
                 `max-age=${24 * 60 * 60}`,
                 'samesite=lax'
-            ].join('; ');
-
-            document.cookie = `session=${encodeURIComponent(sessionData)}; ${cookieOptions}`;
+            ];
             
+            // 프로덕션 환경에서는 secure 플래그 추가
+            if (window.location.protocol === 'https:') {
+                cookieOptions.push('secure');
+            }
+            
+            document.cookie = `session=${encodeURIComponent(sessionData)}; ${cookieOptions.join('; ')}`;
+            
+            console.log('Session saved successfully:', session);
             this.initTokenRefresh();
-            console.log('Session updated successfully');
         } catch (error) {
             console.error('Error setting session:', error);
         }
-    }
+    }    
 
     getSession() {
         try {
@@ -433,36 +440,34 @@ class AuthService {
 
     isAuthenticated() {
         try {
-            const session = this.getSession();
-            if (!session) {
-                console.log('No session found');
+            // 로컬 스토리지 체크
+            const sessionStr = localStorage.getItem('session');
+            console.log('isAuthenticated check, localStorage session:', sessionStr ? 'exists' : 'not found');
+            
+            if (!sessionStr) {
+                console.log('No session found in localStorage');
+                return false;
+            }
+            
+            let session;
+            try {
+                session = JSON.parse(sessionStr);
+            } catch (e) {
+                console.error('Failed to parse session from localStorage:', e);
                 return false;
             }
             
             const expiresAt = new Date(session.expires_at).getTime();
             const now = new Date().getTime();
-    
+            console.log('Session expires in:', Math.round((expiresAt - now) / 1000), 'seconds');
+            
             if (expiresAt <= now) {
                 console.log('Session expired, attempting refresh');
                 return this.refreshToken()
                     .then(newSession => !!newSession)
-                    .catch(() => {
-                        console.error('Token refresh failed during authentication check');
+                    .catch(err => {
+                        console.error('Token refresh failed:', err);
                         return false;
-                    });
-            }
-            
-            if (expiresAt - now < 300000) {
-                console.log('Token expires soon, attempting refresh in background');
-                this.refreshToken()
-                    .then(newSession => {
-                        if (newSession) {
-                            console.log('Background token refresh successful');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Background token refresh failed:', error);
-                        // 백그라운드 갱신 실패는 현재 인증 상태에 영향을 주지 않음
                     });
             }
             
