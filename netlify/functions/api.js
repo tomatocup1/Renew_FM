@@ -1,20 +1,17 @@
 // netlify/functions/api.js
 const serverless = require('serverless-http');
-const express = require('express');
 const app = require('../../backend/server');
 
-// 디버깅을 위한 로그 추가
-console.log('Netlify Function loading...');
-
-// 모든 요청에 대한 로깅 추가
+// Express 요청 로그 미들웨어 추가
 app.use((req, res, next) => {
-  console.log(`[Netlify] ${req.method} ${req.path}`);
+  console.log(`Netlify Function: ${req.method} ${req.url}`);
   
-  // CORS 헤더 추가 (API 요청 시 CORS 문제 해결)
+  // CORS 헤더 추가하여 API 요청 허용
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   
+  // OPTIONS 요청에 대한 처리 (CORS preflight)
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -22,19 +19,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// Express 앱 래핑
-const handler = serverless(app);
+// 누락된 API 엔드포인트 디버깅을 위한 미들웨어
+app.use('/api/auth/user', (req, res, next) => {
+  console.log('auth/user 엔드포인트 요청 감지됨');
+  next();
+});
 
-// Netlify Function 핸들러
-exports.handler = async (event, context) => {
-  // 디버깅을 위한 요청 로그
-  console.log(`Received ${event.httpMethod} request to ${event.path}`);
-  
-  // 요청 처리
-  const result = await handler(event, context);
-  
-  // 응답 로그
-  console.log(`Returning status ${result.statusCode}`);
-  
-  return result;
-};
+app.use('/api/auth/refresh-token', (req, res, next) => {
+  console.log('auth/refresh-token 엔드포인트 요청 감지됨');
+  next();
+});
+
+module.exports.handler = serverless(app, {
+  binary: ['image/png', 'image/jpeg', 'image/gif'],
+  basePath: '',
+  disableLogs: false
+});
