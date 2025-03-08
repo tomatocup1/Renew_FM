@@ -4,12 +4,13 @@ import { CONFIG } from './config.js';
 
 class RulesManager {
   constructor() {
-      this.API_URL = CONFIG.API_BASE_URL;
-      this.currentStore = null;
-      this.currentPlatform = null;
-      this.currentPlatformCode = null;
-      this.ruleData = null;
-      this.init();
+    // API_URL을 Netlify 함수 경로로 설정
+    this.API_URL = `${window.location.origin}/.netlify/functions`;
+    this.currentStore = null;
+    this.currentPlatform = null;
+    this.currentPlatformCode = null;
+    this.ruleData = null;
+    this.init();
   }
 
   async init() {
@@ -61,7 +62,7 @@ class RulesManager {
     // 기타 요소
     this.loadingIndicator = document.getElementById('loadingIndicator');
     this.alertContainer = document.getElementById('alertContainer');
-}
+  }
 
   initEventListeners() {
     // 매장 선택 변경 시
@@ -122,8 +123,8 @@ class RulesManager {
         throw new Error('사용자 정보를 가져올 수 없습니다.');
       }
       
-      // 사용자의 매장 및 플랫폼 정보 조회
-      const response = await fetch(`${this.API_URL}/stores/user-platform-stores`, {
+      // 사용자의 매장 및 플랫폼 정보 조회 - Netlify 함수 경로 사용
+      const response = await fetch(`${this.API_URL}/stores-user-platform`, {
         method: 'GET',
         headers: {
           'Authorization': authService.getAuthHeader(),
@@ -209,8 +210,14 @@ class RulesManager {
 
   async loadRuleData(storeData) {
     try {
-      // 플랫폼 규칙 조회 API 호출
-      const response = await fetch(`${this.API_URL}/rules?store_code=${storeData.store_code}&platform=${storeData.platform}&platform_code=${storeData.platform_code || ''}`, {
+      // 플랫폼 규칙 조회 API 호출 - Netlify 함수 경로 사용
+      const params = new URLSearchParams({
+        store_code: storeData.store_code,
+        platform: storeData.platform || '',
+        platform_code: storeData.platform_code || ''
+      });
+      
+      const response = await fetch(`${this.API_URL}/rules?${params.toString()}`, {
         method: 'GET',
         headers: {
           'Authorization': authService.getAuthHeader(),
@@ -297,7 +304,7 @@ class RulesManager {
         storeSelect.addEventListener('change', () => this.handleStoreChange());
         storeSelect.dataset.hasChangeListener = 'true';
     }
-}
+  }
 
   populateForms(rule) {
     if (!rule) {
@@ -374,7 +381,8 @@ class RulesManager {
         greeting_end: this.greetingEndInput.value.trim()
       };
       
-      const response = await fetch(`${this.API_URL}/rules/${ruleId}`, {
+      // Netlify 함수 경로로 변경
+      const response = await fetch(`${this.API_URL}/rules-detail/${ruleId}`, {
         method: 'PUT',
         headers: {
           'Authorization': authService.getAuthHeader(),
@@ -426,7 +434,8 @@ class RulesManager {
         rating_5_reply: this.ratingCheckboxes[5].checked
       };
       
-      const response = await fetch(`${this.API_URL}/rules/${ruleId}`, {
+      // Netlify 함수 경로로 변경
+      const response = await fetch(`${this.API_URL}/rules-detail/${ruleId}`, {
         method: 'PUT',
         headers: {
           'Authorization': authService.getAuthHeader(),
@@ -484,7 +493,8 @@ class RulesManager {
         max_length: maxLength
       };
       
-      const response = await fetch(`${this.API_URL}/rules/${ruleId}`, {
+      // Netlify 함수 경로로 변경
+      const response = await fetch(`${this.API_URL}/rules-detail/${ruleId}`, {
         method: 'PUT',
         headers: {
           'Authorization': authService.getAuthHeader(),

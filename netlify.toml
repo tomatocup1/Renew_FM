@@ -3,7 +3,7 @@
   publish = "frontend"
   functions = "netlify/functions"
 
-# 기존 인증 리다이렉트 유지
+# 인증 관련 리다이렉트
 [[redirects]]
   from = "/api/auth/user"
   to = "/.netlify/functions/auth-user"
@@ -22,7 +22,31 @@
   status = 200
   force = true
 
-# 매장 관련 API 리다이렉트 추가
+[[redirects]]
+  from = "/api/auth/signup"
+  to = "/.netlify/functions/signup"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/auth/signout"
+  to = "/.netlify/functions/signout"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/auth/social-url/*"
+  to = "/.netlify/functions/social-url/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/auth/social-login"
+  to = "/.netlify/functions/social-login"
+  status = 200
+  force = true
+
+# 매장 관련 API 리다이렉트
 [[redirects]]
   from = "/api/stores/user-platform-stores"
   to = "/.netlify/functions/stores-user-platform"
@@ -31,20 +55,23 @@
 
 [[redirects]]
   from = "/api/user/:userId/stores"
-  to = "/.netlify/functions/user-stores?userId=:userId"
+  to = "/.netlify/functions/user-stores"
   status = 200
+  query = {userId = ":userId"}
   force = true
 
 [[redirects]]
   from = "/api/stores/user/:userId/stores"
-  to = "/.netlify/functions/stores-user-stores?userId=:userId"
+  to = "/.netlify/functions/stores-user-stores"
   status = 200
+  query = {userId = ":userId"}
   force = true
 
 [[redirects]]
   from = "/api/users/:userId/stores"
-  to = "/.netlify/functions/users-stores?userId=:userId"
+  to = "/.netlify/functions/users-stores"
   status = 200
+  query = {userId = ":userId"}
   force = true
 
 [[redirects]]
@@ -71,7 +98,25 @@
   status = 200
   force = true
 
-# 최종 폴백 리다이렉트
+[[redirects]]
+  from = "/api/rules"
+  to = "/.netlify/functions/rules"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/rules/*"
+  to = "/.netlify/functions/rules-detail/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/reviews"
+  to = "/.netlify/functions/reviews"
+  status = 200
+  force = true
+
+# 최종 폴백 리다이렉트 - SPA 지원
 [[redirects]]
   from = "/*"
   to = "/index.html"

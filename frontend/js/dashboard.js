@@ -281,130 +281,185 @@ applyCalendarStyles() {
         });
     }
 
+// dashboard.js 파일 안의 initializeStoreSelect 함수 수정
+
     async initializeStoreSelect() {
         try {
-          console.log('매장 정보 초기화 시작...');
-          
-          const user = await authService.getCurrentUser();
-          if (!user?.id) {
+        console.log('매장 정보 초기화 시작...');
+        
+        const user = await authService.getCurrentUser();
+        if (!user?.id) {
             console.error('사용자 정보를 가져올 수 없습니다');
             this.showAlert('사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.', 'error');
             setTimeout(() => window.location.href = '/login.html', 2000);
             return;
-          }
-          
-          console.log('사용자 정보:', user);
-          
-          // API 호출 방식 변경 - authService.fetchAPI 사용
-          try {
-            const response = await fetch(`${CONFIG.API_BASE_URL}/stores/user-platform-stores`, {
-              method: 'GET',
-              headers: {
+        }
+        
+        console.log('사용자 정보:', user);
+        
+        // API 호출 방식을 절대 경로로 변경
+        try {
+            // 절대 경로 중심으로 재구성
+            const baseUrl = window.location.origin; // 현재 도메인 (예: https://wealthfm.co.kr)
+            const response = await fetch(`${baseUrl}/.netlify/functions/stores-user-platform`, {
+            method: 'GET',
+            headers: {
                 'Authorization': authService.getAuthHeader(),
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
-              },
-              credentials: 'include'
+            },
+            credentials: 'include'
             });
-          
+        
             console.log('API 응답 상태:', response.status);
             
             if (!response.ok) {
-              // 첫 번째 방법 실패 시 대체 URL 시도
-              console.log('첫 번째 API 요청 실패, 대체 URL 시도');
-              return await this.initializeStoreSelectFallback(user.id);
+            // 첫 번째 방법 실패 시 대체 URL 시도
+            console.log('첫 번째 API 요청 실패, 대체 URL 시도');
+            return await this.initializeStoreSelectFallback(user.id);
             }
-          
+        
             const stores = await response.json();
             console.log('매장 데이터:', stores);
-          
+        
             if (!Array.isArray(stores) || stores.length === 0) {
-              console.warn('매장 정보가 없습니다');
-              this.showAlert('표시할 매장 정보가 없습니다. 관리자에게 매장 할당을 요청하세요.', 'warning');
-              return;
+            console.warn('매장 정보가 없습니다');
+            this.showAlert('표시할 매장 정보가 없습니다. 관리자에게 매장 할당을 요청하세요.', 'warning');
+            return;
             }
-          
+        
             // 중복 제거 및 포맷팅 처리
             const uniqueStores = {};
             stores.forEach(store => {
-              const key = `${store.store_code}-${store.platform_code || ''}`;
-              if (!uniqueStores[key]) {
+            const key = `${store.store_code}-${store.platform_code || ''}`;
+            if (!uniqueStores[key]) {
                 uniqueStores[key] = store;
-              }
+            }
             });
-          
+        
             const formattedStores = Object.values(uniqueStores).map(store => ({
+            value: JSON.stringify({
+                store_code: store.store_code,
+                platform_code: store.platform_code || '',
+                platform: store.platform || '배달의민족'
+            }),
+            label: store.platform_code ? 
+                    `[${store.platform || '배달의민족'}] ${store.store_name} (${store.platform_code})` :
+                    `[배달의민족] ${store.store_name}`,
+            store_code: store.store_code
+            }));
+        
+            console.log('포맷팅된 매장 목록:', formattedStores);
+            this.populateStoreSelectWithAllOption(formattedStores);
+        } catch (apiError) {
+            console.error('API 호출 중 오류:', apiError);
+            // 첫 번째 방법 실패 시 대체 URL 시도
+            return await this.initializeStoreSelectFallback(user.id);
+        }
+        } catch (error) {
+        console.error('매장 목록 초기화 중 오류 발생:', error);
+        this.showAlert('매장 정보를 불러오는데 실패했습니다. 새로고침 후 다시 시도해주세요.', 'error');
+        
+        // 폴백 시도
+        try {
+            const user = await authService.getCurrentUser();
+            if (user?.id) {
+            await this.initializeStoreSelectFallback(user.id);
+            }
+        } catch (fallbackError) {
+            console.error('폴백 로드도 실패:', fallbackError);
+        }
+        }
+    }
+        
+    async initializeStoreSelectFallback(userId) {
+        console.log('폴백 매장 로드 시도 중... 사용자 ID:', userId);
+        
+        try {
+          // 다양한 대체 URL 시도 - 절대 경로로 수정
+          const baseUrl = window.location.origin; // 현재 도메인
+          const possibleEndpoints = [
+            `${baseUrl}/.netlify/functions/user-stores?userId=${userId}`,
+            `${baseUrl}/.netlify/functions/stores-user-stores?userId=${userId}`,
+            `${baseUrl}/.netlify/functions/users-stores?userId=${userId}`
+          ];
+          
+          let stores = null;
+          let successUrl = '';
+          
+          // 가능한 모든 엔드포인트 시도
+          for (const endpoint of possibleEndpoints) {
+            try {
+              console.log(`API 엔드포인트 시도: ${endpoint}`);
+              const response = await fetch(endpoint, {
+                method: 'GET',
+                headers: {
+                  'Authorization': authService.getAuthHeader(),
+                  'Accept': 'application/json'
+                },
+                credentials: 'include'
+              });
+              
+              if (response.ok) {
+                stores = await response.json();
+                successUrl = endpoint;
+                console.log(`성공한 API 엔드포인트: ${endpoint}`);
+                break;
+              } else {
+                console.log(`엔드포인트 ${endpoint} 응답 코드: ${response.status}`);
+              }
+            } catch (error) {
+              console.log(`엔드포인트 ${endpoint} 오류:`, error);
+            }
+          }
+          
+          if (!stores || stores.length === 0) {
+            console.warn('폴백: 매장 정보가 없습니다');
+            this.showAlert('표시할 매장 정보가 없습니다.', 'warning');
+            return;
+          }
+          
+          console.log(`폴백 성공 (${successUrl}): 매장 데이터:`, stores);
+          
+          // 매장 데이터 형식에 따라 처리 로직 분기
+          let formattedStores;
+          
+          // 데이터 형식 분석
+          const isDetailedFormat = stores.some(store => 
+            store.store_name !== undefined || store.platform !== undefined);
+          
+          if (isDetailedFormat) {
+            // 이미 형식화된 데이터
+            formattedStores = stores.map(store => ({
               value: JSON.stringify({
                 store_code: store.store_code,
                 platform_code: store.platform_code || '',
                 platform: store.platform || '배달의민족'
               }),
-              label: store.platform_code ? 
-                     `[${store.platform || '배달의민족'}] ${store.store_name} (${store.platform_code})` :
-                     `[배달의민족] ${store.store_name}`,
+              label: store.platform ? 
+                    `[${store.platform}] ${store.store_name || store.store_code}` :
+                    `[배달의민족] ${store.store_name || store.store_code}`,
               store_code: store.store_code
             }));
-          
-            console.log('포맷팅된 매장 목록:', formattedStores);
-            this.populateStoreSelectWithAllOption(formattedStores);
-          } catch (apiError) {
-            console.error('API 호출 중 오류:', apiError);
-            // 첫 번째 방법 실패 시 대체 URL 시도
-            return await this.initializeStoreSelectFallback(user.id);
+          } else {
+            // 간단한 store_code만 있는 형식
+            formattedStores = stores.map(store => ({
+              value: JSON.stringify({
+                store_code: typeof store === 'string' ? store : store.store_code,
+                platform_code: '',
+                platform: '배달의민족'
+              }),
+              label: `[배달의민족] ${typeof store === 'string' ? store : store.store_code}`,
+              store_code: typeof store === 'string' ? store : store.store_code
+            }));
           }
-        } catch (error) {
-          console.error('매장 목록 초기화 중 오류 발생:', error);
-          this.showAlert('매장 정보를 불러오는데 실패했습니다. 새로고침 후 다시 시도해주세요.', 'error');
           
-          // 폴백 시도
-          try {
-            const user = await authService.getCurrentUser();
-            if (user?.id) {
-              await this.initializeStoreSelectFallback(user.id);
-            }
-          } catch (fallbackError) {
-            console.error('폴백 로드도 실패:', fallbackError);
-          }
-        }
-      }
-      
-      // 폴백 로드 함수 추가
-      async loadStoresFallback() {
-        console.log('폴백 매장 로드 시도 중...');
-        const user = await authService.getCurrentUser();
-        
-        if (!user?.id) {
-          throw new Error('사용자 정보 없음');
-        }
-        
-        const response = await fetch(`${CONFIG.API_BASE_URL}/user/${user.id}/stores`, {
-          method: 'GET',
-          headers: {
-            'Authorization': authService.getAuthHeader(),
-            'Accept': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        if (!response.ok) {
-          throw new Error(`폴백 매장 로드 실패 (${response.status})`);
-        }
-        
-        const stores = await response.json();
-        console.log('폴백 매장 데이터:', stores);
-        
-        if (Array.isArray(stores) && stores.length > 0) {
-          const formattedStores = stores.map(store => ({
-            value: JSON.stringify({
-              store_code: store.store_code,
-              platform_code: store.platform_code || '',
-              platform: store.platform || '배달의민족'
-            }),
-            label: `${store.store_name || store.store_code}`,
-            store_code: store.store_code
-          }));
-          
+          console.log('폴백: 포맷팅된 매장 목록:', formattedStores);
           this.populateStoreSelectWithAllOption(formattedStores);
+        } catch (error) {
+          console.error('폴백 매장 로드 실패:', error);
+          this.showAlert('매장 정보를 불러오는데 실패했습니다.', 'error');
+          throw error;
         }
       }
 
@@ -1204,82 +1259,86 @@ async initializeStoreSelectFallback(userId) {
         return combined;
     }
 
-    async loadStatsAndReviews({ startDate, endDate, store_code, platform_code, platform } = {}) {
-        try {
-            // 로딩 표시기 표시
-            this.showLoadingIndicator(true);
-            
-            if (!store_code) {
-                this.clearDashboard();
-                this.showLoadingIndicator(false);
-                return;
-            }
-            
-            console.log('Loading stats with filters:', { 
-                store_code, 
-                platform_code,
-                platform,
-                startDate, 
-                endDate 
-            });
-            
-            // URL 파라미터 구성
-            const params = new URLSearchParams({
-                store_code: store_code
-            });
-    
-            // 플랫폼 코드가 있으면 추가
-            if (platform_code) {
-                params.append('platform_code', platform_code);
-            }
-            
-            // 플랫폼 정보가 있으면 추가
-            if (platform) {
-                params.append('platform', platform);
-            }
-    
-            // 날짜 파라미터 추가
-            if (startDate && endDate) {
-                const formattedStartDate = this.formatDateForAPI(startDate);
-                const formattedEndDate = this.formatDateForAPI(endDate);
-                console.log('Date range:', { formattedStartDate, formattedEndDate });
-                params.append('start_date', formattedStartDate);
-                params.append('end_date', formattedEndDate);
-            }
-            
-            // 한 번에 가져올 리뷰 수를 제한
-            params.append('limit', this.reviewsPerPage.toString());
-            
-            const url = `${CONFIG.API_BASE_URL}/stats/details?${params.toString()}`;
-            console.log('Requesting URL:', url);
-    
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': authService.getAuthHeader(),
-                    'Content-Type': 'application/json'
-                }
-            });
-    
-            if (!response.ok) throw new Error('데이터 조회에 실패했습니다');
-    
-            const data = await response.json();
-            console.log('Received data:', data);
-            
-            // 서버에서 더 많은 데이터를 가져올 수 있는지 확인
-            this.hasMoreServerData = Array.isArray(data.reviews) && 
-                data.reviews.length >= this.reviewsPerPage;
-                
-            // 대시보드 업데이트
-            this.updateDashboard(data);
-            this.showLoadingIndicator(false);
-            
-        } catch (error) {
-            console.error('Stats loading error:', error);
-            this.clearDashboard();
-            this.showLoadingIndicator(false);
-            this.showAlert('데이터를 불러오는 중 오류가 발생했습니다', 'error');
+    // dashboard.js 파일 안의 loadStatsAndReviews 함수 수정
+
+async loadStatsAndReviews({ startDate, endDate, store_code, platform_code, platform } = {}) {
+    try {
+      // 로딩 표시기 표시
+      this.showLoadingIndicator(true);
+      
+      if (!store_code) {
+        this.clearDashboard();
+        this.showLoadingIndicator(false);
+        return;
+      }
+      
+      console.log('Loading stats with filters:', { 
+        store_code, 
+        platform_code,
+        platform,
+        startDate, 
+        endDate 
+      });
+      
+      // URL 파라미터 구성
+      const params = new URLSearchParams({
+        store_code: store_code
+      });
+  
+      // 플랫폼 코드가 있으면 추가
+      if (platform_code) {
+        params.append('platform_code', platform_code);
+      }
+      
+      // 플랫폼 정보가 있으면 추가
+      if (platform) {
+        params.append('platform', platform);
+      }
+  
+      // 날짜 파라미터 추가
+      if (startDate && endDate) {
+        const formattedStartDate = this.formatDateForAPI(startDate);
+        const formattedEndDate = this.formatDateForAPI(endDate);
+        console.log('Date range:', { formattedStartDate, formattedEndDate });
+        params.append('start_date', formattedStartDate);
+        params.append('end_date', formattedEndDate);
+      }
+      
+      // 한 번에 가져올 리뷰 수를 제한
+      params.append('limit', this.reviewsPerPage.toString());
+      
+      // 절대 경로로 URL 변경
+      const baseUrl = window.location.origin;
+      const url = `${baseUrl}/.netlify/functions/stats-details?${params.toString()}`;
+      console.log('Requesting URL:', url);
+  
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': authService.getAuthHeader(),
+          'Content-Type': 'application/json'
         }
+      });
+  
+      if (!response.ok) throw new Error('데이터 조회에 실패했습니다');
+  
+      const data = await response.json();
+      console.log('Received data:', data);
+      
+      // 서버에서 더 많은 데이터를 가져올 수 있는지 확인
+      this.hasMoreServerData = Array.isArray(data.reviews) && 
+        data.reviews.length >= this.reviewsPerPage;
+        
+      // 대시보드 업데이트
+      this.updateDashboard(data);
+      this.showLoadingIndicator(false);
+      
+    } catch (error) {
+      console.error('Stats loading error:', error);
+      this.clearDashboard();
+      this.showLoadingIndicator(false);
+      this.showAlert('데이터를 불러오는 중 오류가 발생했습니다', 'error');
     }
+  }
 
     showAlert(message, type = 'info') {
         const alertElement = document.createElement('div');

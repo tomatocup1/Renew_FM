@@ -1,4 +1,4 @@
-// netlify/functions/stores-user-platform.js
+// netlify/functions/stores-all.js
 const { createClient } = require('@supabase/supabase-js');
 
 // Supabase 클라이언트 초기화
@@ -47,45 +47,45 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // 사용자-매장 할당 데이터 조회
-    const { data: assignments, error: assignmentError } = await supabase
-      .from('store_assignments')
-      .select('store_code, role_type')
-      .eq('user_id', user.id);
-    
-    if (assignmentError) {
+    // 관리자 권한 확인 (전체 매장 목록은 관리자만 접근 가능)
+    const { data: userData, error: getUserError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (getUserError || !userData) {
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: '매장 할당 정보를 불러오는데 실패했습니다.' })
+        body: JSON.stringify({ error: '사용자 정보를 불러오는데 실패했습니다.' })
       };
     }
 
-    // 할당된 매장이 없는 경우
-    if (!assignments || assignments.length === 0) {
+    if (userData.role !== '운영자') {
       return {
-        statusCode: 200,
+        statusCode: 403,
         headers,
-        body: JSON.stringify([])
+        body: JSON.stringify({ error: '관리자 권한이 필요합니다.' })
       };
     }
 
-    // 매장 코드 목록 추출
-    const storeCodes = assignments.map(a => a.store_code);
-
-    // 매장 정보 조회
-    const { data: stores, error: storeError } = await supabase
+    // 전체 매장 정보 조회
+    const { data: storeInfos, error: storeInfoError } = await supabase
       .from('store_info')
       .select('*')
-      .in('store_code', storeCodes);
+      .order('store_code', { ascending: true });
     
-    if (storeError) {
+    if (storeInfoError) {
       return {
         statusCode: 500,
         headers,
         body: JSON.stringify({ error: '매장 정보를 불러오는데 실패했습니다.' })
       };
     }
+
+    // 매장 코드 목록 추출
+    const storeCodes = storeInfos.map(store => store.store_code);
 
     // 플랫폼 규칙에서 매장 이름 등 추가 정보 가져오기
     const { data: platformRules, error: rulesError } = await supabase
@@ -95,21 +95,23 @@ exports.handler = async (event, context) => {
     
     if (rulesError) {
       console.error('Platform rules query error:', rulesError);
-      // 오류가 있더라도 진행 (매장 이름은 필수가 아님)
     }
 
-    // 최종 결과 구성
-    const result = platformRules?.length ? platformRules.map(rule => ({
-      store_code: rule.store_code,
-      platform: rule.platform || '배달의민족',
-      platform_code: rule.platform_code || '',
-      store_name: rule.store_name || rule.store_code
-    })) : stores.map(store => ({
-      store_code: store.store_code,
-      platform: '배달의민족',
-      platform_code: '',
-      store_name: store.store_code
-    }));
+    // 매장 정보와 규칙 정보 매핑
+    const result = storeInfos.map(store => {
+      // 해당 매장의 규칙 찾기
+      const storeRules = platformRules?.filter(rule => rule.store_code === store.store_code) || [];
+      
+      // 규칙이 있으면 첫 번째 규칙의 매장 이름 사용, 없으면 매장 코드 사용
+      const storeName = storeRules.length > 0 ? storeRules[0].store_name : store.store_code;
+      
+      return {
+        store_code: store.store_code,
+        store_name: storeName || store.store_code,
+        platform_info: store.platform_info,
+        created_at: store.created_at
+      };
+    });
 
     return {
       statusCode: 200,
