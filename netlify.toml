@@ -5,6 +5,18 @@
 
 # 인증 관련 리다이렉트
 [[redirects]]
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+  
+[[redirects]]
   from = "/api/auth/user"
   to = "/.netlify/functions/auth-user"
   status = 200
