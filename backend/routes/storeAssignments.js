@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const storeAssignmentController = require('../controllers/storeAssignmentController');
-const { requireAuth, requireRole } = require('../middleware/authMiddleware');
-const supabase = require('../supabaseClient');
+const authMiddleware = require('../middleware/authMiddleware');
+const { supabase } = require('../supabaseClient');
 
 console.log('storeAssignments 라우터 로드됨');
 
@@ -20,9 +20,9 @@ router.use((req, res, next) => {
 });
 
 // 기본 인증 미들웨어 적용
-router.use(requireAuth);
-router.get('/user/:userId/stores', storeAssignmentController.getUserStores);
-// 유저 플랫폼별 매장 정보 조회 엔드포인트 추가
+router.use(authMiddleware.authenticate);
+
+// 유저 플랫폼별 매장 정보 조회 엔드포인트
 router.get('/user-platform-stores', async (req, res) => {
     try {
         const user = req.user;
@@ -73,13 +73,30 @@ router.get('/user-platform-stores', async (req, res) => {
     }
 });
 
+// 사용자 ID로 스토어 가져오기 (폴백 경로)
+router.get('/user/:userId/stores', storeAssignmentController.getUserStores);
+
+// 운영자 권한 체크 미들웨어 함수
+function requireRole(roles) {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ error: '인증이 필요합니다' });
+        }
+        
+        if (!roles.includes(req.user.role)) {
+            return res.status(403).json({ error: '접근 권한이 없습니다' });
+        }
+        
+        next();
+    };
+}
+
 // 운영자 권한 체크 미들웨어 (아래 라우트에만 적용)
 const adminRoutes = express.Router();
 adminRoutes.use(requireRole(['운영자', '관리자']));
 
-// 라우트 정의
+// 관리자 라우트 정의
 adminRoutes.get('/users', storeAssignmentController.getAllUsers);
-adminRoutes.get('/user/:userId/stores', storeAssignmentController.getUserStores);
 adminRoutes.get('/all', storeAssignmentController.getAllStores);
 adminRoutes.post('/assignments', storeAssignmentController.assignStores);
 
