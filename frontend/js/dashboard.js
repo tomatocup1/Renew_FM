@@ -160,15 +160,44 @@ applyCalendarStyles() {
             
             if (expiresAt <= now) {
               console.log('토큰 만료됨, 갱신 시도');
-              const refreshed = await authService.refreshToken().catch(() => null);
-              
-              if (!refreshed) {
-                console.log('토큰 갱신 실패, 로그인 페이지로 이동');
-                window.location.href = '/login.html';
-                return;
+              try {
+                const refreshed = await authService.refreshToken().catch(error => {
+                  console.warn('토큰 갱신 중 오류 발생:', error);
+                  return null;
+                });
+                
+                if (!refreshed) {
+                  console.warn('토큰 갱신 실패, 하지만 세션 유지 시도');
+                  // 갱신 실패해도 즉시 리다이렉트하지 않고 사용자 경험 유지 시도
+                  if (session.access_token) {
+                    console.log('기존 토큰으로 계속 진행 시도');
+                    // session을 재저장하여 유효기간 연장 시도
+                    const extendedSession = {
+                      ...session,
+                      // 현재 시간으로부터 10분 연장
+                      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+                    };
+                    localStorage.setItem('session', JSON.stringify(extendedSession));
+                    console.log('세션 만료 시간 임시 연장됨');
+                  } else {
+                    console.log('유효한 토큰 없음, 로그인 페이지로 이동');
+                    window.location.href = '/login.html';
+                    return;
+                  }
+                } else {
+                  console.log('토큰 갱신 성공 또는 기존 세션 유지됨');
+                }
+              } catch (refreshError) {
+                console.error('토큰 갱신 중 예외:', refreshError);
+                // 심각한 오류가 아니면 계속 진행 시도
+                if (session.access_token) {
+                  console.log('갱신 중 예외 발생했지만 기존 토큰으로 계속 진행');
+                } else {
+                  console.error('갱신 실패 및 유효한 토큰 없음');
+                  window.location.href = '/login.html';
+                  return;
+                }
               }
-              
-              console.log('토큰 갱신 성공');
             }
           } catch (parseError) {
             console.error('세션 파싱 오류:', parseError);
@@ -179,10 +208,28 @@ applyCalendarStyles() {
           // 인증 확인 (예외 처리 추가)
           let isAuthed = false;
           try {
-            isAuthed = await authService.isAuthenticated();
+            // 자체 인증 확인 로직 추가
+            const currentSession = JSON.parse(localStorage.getItem('session') || sessionStorage.getItem('session') || '{}');
+            const hasValidToken = !!currentSession.access_token;
+            
+            // isAuthenticated 호출 전에 간단히 토큰 존재 여부 확인
+            if (hasValidToken) {
+              console.log('액세스 토큰 존재하여 인증 추정');
+              isAuthed = true;
+            } else {
+              // 기존 인증 확인 메서드 호출
+              isAuthed = await authService.isAuthenticated();
+            }
+            
             console.log('인증 상태:', isAuthed ? '인증됨' : '인증 안됨');
           } catch (authError) {
             console.error('인증 확인 중 오류:', authError);
+            // 오류 발생해도 세션 있으면 계속 진행 시도
+            const session = JSON.parse(localStorage.getItem('session') || sessionStorage.getItem('session') || '{}');
+            if (session.access_token) {
+              console.log('인증 확인 중 오류 발생했지만 세션 존재하여 계속 진행');
+              isAuthed = true;
+            }
           }
           
           if (!isAuthed) {

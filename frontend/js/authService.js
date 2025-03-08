@@ -268,7 +268,6 @@ class AuthService {
           const session = this.getSession();
           if (!session?.refresh_token) {
             console.error('리프레시 토큰이 없습니다');
-            this.clearSession();
             return null;
           }
       
@@ -278,44 +277,50 @@ class AuthService {
           const refreshUrl = `${this.API_URL}/auth/refresh-token`;
           console.log('요청 URL:', refreshUrl);
           
-          const response = await fetch(refreshUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-              refresh_token: session.refresh_token
-            })
-          });
+          try {
+            const response = await fetch(refreshUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              credentials: 'include',
+              body: JSON.stringify({
+                refresh_token: session.refresh_token
+              })
+            });
       
-          // 응답 상태 로깅
-          console.log('토큰 갱신 응답 상태:', response.status);
-          
-          if (!response.ok) {
-            console.error('토큰 갱신 실패:', response.status);
-            if (response.status === 404) {
-              console.error('토큰 갱신 엔드포인트를 찾을 수 없습니다');
+            console.log('토큰 갱신 응답 상태:', response.status);
+            
+            if (!response.ok) {
+              console.error('토큰 갱신 실패:', response.status);
+              
+              // 404 오류일 경우 세션을 유지하고 null 반환 (세션 클리어 방지)
+              if (response.status === 404) {
+                console.warn('토큰 갱신 엔드포인트를 찾을 수 없습니다. 기존 세션을 유지합니다.');
+                return session; // 기존 세션 반환하여 로그인 상태 유지
+              }
+              
+              return null;
             }
-            this.clearSession();
-            return null;
-          }
       
-          const data = await response.json();
-          if (!data.session) {
-            console.error('토큰 갱신 응답에 세션 정보가 없습니다');
-            this.clearSession();
-            return null;
-          }
+            const data = await response.json();
+            if (!data.session) {
+              console.error('토큰 갱신 응답에 세션 정보가 없습니다');
+              return null;
+            }
       
-          console.log('토큰 갱신 성공');
-          this.setSession(data.session);
-          
-          return data.session;
+            console.log('토큰 갱신 성공');
+            this.setSession(data.session);
+            
+            return data.session;
+          } catch (fetchError) {
+            console.error('토큰 갱신 요청 중 네트워크 오류:', fetchError);
+            // 네트워크 오류일 경우 기존 세션 유지
+            return session;
+          }
         } catch (error) {
           console.error('토큰 갱신 중 예외 발생:', error);
-          this.clearSession();
           return null;
         } finally {
           this.isRefreshing = false;

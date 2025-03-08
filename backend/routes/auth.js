@@ -21,7 +21,7 @@ router.post('/social-login', authController.socialSignIn);
 
 // 주의: refresh-token에는 requireAuth 걸지 않는다!
 router.post('/refresh-token', (req, res, next) => {
-    console.log('Refresh token request received');
+    console.log('Refresh token request received at:', new Date().toISOString());
     return authController.refreshToken(req, res, next);
   });
 
