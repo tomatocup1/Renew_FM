@@ -3,68 +3,21 @@
   publish = "frontend"
   functions = "netlify/functions"
 
-# 인증 관련 리다이렉트
+# Netlify Functions 직접 접근 허용
 [[redirects]]
   from = "/.netlify/functions/*"
   to = "/.netlify/functions/:splat"
   status = 200
   force = true
 
+# 일반 API 경로 처리 (캐치올 리다이렉트)
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
   force = true
-  
-[[redirects]]
-  from = "/api/auth/user"
-  to = "/.netlify/functions/auth-user"
-  status = 200
-  force = true
 
-[[redirects]]
-  from = "/api/auth/refresh-token"
-  to = "/.netlify/functions/refresh-token"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/auth/signin"
-  to = "/.netlify/functions/signin"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/auth/signup"
-  to = "/.netlify/functions/signup"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/auth/signout"
-  to = "/.netlify/functions/signout"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/auth/social-url/*"
-  to = "/.netlify/functions/social-url/:splat"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/auth/social-login"
-  to = "/.netlify/functions/social-login"
-  status = 200
-  force = true
-
-# 매장 관련 API 리다이렉트
-[[redirects]]
-  from = "/api/stores/user-platform-stores"
-  to = "/.netlify/functions/stores-user-platform"
-  status = 200
-  force = true
-
+# 매장 관련 API 경로 (쿼리 파라미터 사용)
 [[redirects]]
   from = "/api/user/:userId/stores"
   to = "/.netlify/functions/user-stores"
@@ -86,49 +39,14 @@
   query = {userId = ":userId"}
   force = true
 
+# 규칙 세부 정보 API (path 파라미터 사용)
 [[redirects]]
-  from = "/api/stats/details"
-  to = "/.netlify/functions/stats-details"
+  from = "/api/rules/:ruleId"
+  to = "/.netlify/functions/rules-detail/:ruleId"
   status = 200
   force = true
 
-[[redirects]]
-  from = "/api/stores/all"
-  to = "/.netlify/functions/stores-all"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/stores/users"
-  to = "/.netlify/functions/stores-users"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/stores/assignments"
-  to = "/.netlify/functions/stores-assignments"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/rules"
-  to = "/.netlify/functions/rules"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/rules/*"
-  to = "/.netlify/functions/rules-detail/:splat"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/reviews"
-  to = "/.netlify/functions/reviews"
-  status = 200
-  force = true
-
-# 최종 폴백 리다이렉트 - SPA 지원
+# 최종 폴백 리다이렉트 (SPA 지원)
 [[redirects]]
   from = "/*"
   to = "/index.html"
