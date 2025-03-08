@@ -289,15 +289,12 @@
             async handleSubmit(e) {
                 e.preventDefault();
                 this.clearErrors();
-                
-                showDebugMessage("로그인 시작");
 
                 const email = document.getElementById('email').value;
                 const password = document.getElementById('password').value;
 
                 if (!email || !password) {
                     this.showError('이메일과 비밀번호를 모두 입력해주세요.');
-                    showDebugMessage("로그인 실패: 이메일과 비밀번호 필요");
                     return;
                 }
 
@@ -305,52 +302,55 @@
                     const submitButton = this.form.querySelector('button[type="submit"]');
                     submitButton.disabled = true;
                     submitButton.textContent = '로그인 중...';
-                    
-                    showDebugMessage(`로그인 시도: ${email}`);
 
-                    // 로그인 직전 로컬 스토리지와 쿠키 상태 확인
-                    const beforeSessionStr = localStorage.getItem('session');
-                    showDebugMessage(`로그인 전 세션: ${beforeSessionStr ? '존재함' : '없음'}`);
+                    console.log('로그인 시도:', email);
+                    
+                    // 기존 세션 정보 초기화
+                    localStorage.removeItem('session');
+                    localStorage.removeItem('user');
+                    console.log('세션 정보 초기화 완료');
                     
                     // 로그인 시도
                     const loginResult = await authService.login(email, password);
-                    showDebugMessage("API 응답 수신 완료");
+                    console.log('로그인 응답:', loginResult);
                     
-                    // 로그인 후 로컬 스토리지와 쿠키 상태 확인
-                    const afterSessionStr = localStorage.getItem('session');
-                    showDebugMessage(`로그인 후 세션: ${afterSessionStr ? '존재함' : '없음'}`);
-                    
-                    // 세션이 제대로 저장되었는지 검증
-                    if (!afterSessionStr) {
-                        showDebugMessage("⚠️ 세션이 로컬 스토리지에 저장되지 않음");
-                        
-                        // 수동으로 세션 저장 시도
-                        if (loginResult.session) {
-                            localStorage.setItem('session', JSON.stringify(loginResult.session));
-                            showDebugMessage("✅ 세션 수동 저장 완료");
-                        }
-                    } else {
-                        showDebugMessage("✅ 세션 저장 확인됨");
+                    if (!loginResult.session) {
+                    throw new Error('로그인 응답에 세션 정보가 없습니다');
                     }
                     
-                    // 지연시간을 늘려서 대시보드 리다이렉션
-                    showDebugMessage("2초 후 대시보드로 이동합니다...");
+                    // 직접 세션 저장 (authService.setSession이 실패할 경우를 대비)
+                    localStorage.setItem('session', JSON.stringify(loginResult.session));
+                    console.log('세션 수동 저장 완료');
+                    
+                    if (loginResult.user) {
+                    localStorage.setItem('user', JSON.stringify(loginResult.user));
+                    console.log('사용자 정보 저장 완료');
+                    }
+                    
+                    // 세션 저장 확인
+                    const savedSession = localStorage.getItem('session');
+                    console.log('세션 저장 확인:', savedSession ? '성공' : '실패');
+                    
+                    if (!savedSession) {
+                    this.showError('세션 정보를 저장할 수 없습니다. 브라우저 설정을 확인하세요.');
+                    return;
+                    }
+                    
+                    // 리다이렉트 전 딜레이 추가 (세션 저장 시간 확보)
+                    console.log('로그인 성공, 잠시 후 대시보드로 이동합니다...');
                     setTimeout(() => {
-                        showDebugMessage("➡️ 대시보드로 이동 중...");
-                        window.location.href = './dashboard.html';
-                    }, 2000);
-
+                    console.log('대시보드로 이동 중...');
+                    window.location.href = './dashboard.html';
+                    }, 1000);
                 } catch (error) {
-                    showDebugMessage(`❌ 로그인 오류: ${error.message}`);
-                    console.error('Login error:', error);
+                    console.error('로그인 오류:', error);
                     this.showError(error.message || '로그인에 실패했습니다.');
-
                 } finally {
                     const submitButton = this.form.querySelector('button[type="submit"]');
                     submitButton.disabled = false;
                     submitButton.textContent = '로그인';
                 }
-            }
+                }
         }
         // 페이지 로드 시 LoginManager 초기화
         document.addEventListener('DOMContentLoaded', () => {
@@ -399,5 +399,87 @@
             console.log(message);
         }
         </script>
+        <script>
+            // 세션 디버깅 UI
+            document.addEventListener('DOMContentLoaded', () => {
+              setTimeout(() => {
+                // 디버그 UI 컨테이너
+                const debugContainer = document.createElement('div');
+                debugContainer.id = 'session-debug';
+                debugContainer.style.cssText = `
+                  position: fixed;
+                  bottom: 10px;
+                  left: 10px;
+                  background: rgba(0,0,0,0.7);
+                  color: white;
+                  padding: 10px;
+                  border-radius: 5px;
+                  font-family: monospace;
+                  font-size: 12px;
+                  z-index: 10000;
+                  max-width: 300px;
+                  max-height: 200px;
+                  overflow: auto;
+                `;
+                
+                // 세션 정보 수집
+                const localSession = localStorage.getItem('session');
+                const sessionStorageSession = sessionStorage.getItem('session');
+                
+                // 쿠키에서 세션 검색
+                function getCookie(name) {
+                  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+                  return match ? match[2] : null;
+                }
+                const cookieSession = getCookie('session');
+                
+                // 디버그 정보 구성
+                let debugContent = '<h3 style="margin:0 0 5px 0;font-size:14px;">세션 디버그</h3>';
+                debugContent += '<div style="margin-bottom:5px;">localStorage: ' + (localSession ? '있음' : '없음') + '</div>';
+                debugContent += '<div style="margin-bottom:5px;">sessionStorage: ' + (sessionStorageSession ? '있음' : '없음') + '</div>';
+                debugContent += '<div style="margin-bottom:5px;">cookie: ' + (cookieSession ? '있음' : '없음') + '</div>';
+                
+                // 세션이 있으면 추가 정보 표시
+                if (localSession) {
+                  try {
+                    const session = JSON.parse(localSession);
+                    const expires = new Date(session.expires_at);
+                    const now = new Date();
+                    const timeLeft = Math.round((expires - now) / 1000);
+                    
+                    debugContent += '<div style="margin-top:5px;border-top:1px solid #555;padding-top:5px;">';
+                    debugContent += `만료: ${timeLeft > 0 ? `${timeLeft}초 남음` : '만료됨'}<br>`;
+                    debugContent += `토큰: ${session.access_token ? session.access_token.substring(0, 10) + '...' : '없음'}`;
+                    debugContent += '</div>';
+                  } catch (e) {
+                    debugContent += '<div style="color:red;">파싱 오류: ' + e.message + '</div>';
+                  }
+                }
+                
+                // 액션 버튼
+                debugContent += '<div style="margin-top:10px;">';
+                debugContent += '<button id="debug-refresh" style="margin-right:5px;padding:3px;">새로고침</button>';
+                debugContent += '<button id="debug-clear" style="padding:3px;">세션 삭제</button>';
+                debugContent += '</div>';
+                
+                debugContainer.innerHTML = debugContent;
+                document.body.appendChild(debugContainer);
+                
+                // 버튼 이벤트 연결
+                document.getElementById('debug-refresh').addEventListener('click', () => {
+                  window.location.reload();
+                });
+                
+                document.getElementById('debug-clear').addEventListener('click', () => {
+                  localStorage.removeItem('session');
+                  localStorage.removeItem('user');
+                  sessionStorage.removeItem('session');
+                  document.cookie = 'session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                  alert('세션이 삭제되었습니다. 페이지를 새로고침합니다.');
+                  window.location.reload();
+                });
+              }, 1000);
+            });
+            </script>
 </body>
 </html>

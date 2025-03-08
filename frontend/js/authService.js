@@ -69,64 +69,92 @@ class AuthService {
     // 기존 로그인 함수
     async login(email, password) {
         try {
-            if (typeof showDebugMessage === 'function') {
-                showDebugMessage('로그인 API 호출 시작');
-            }
-            
-            const response = await this.fetchWithRetry(`${this.API_URL}/auth/signin`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                credentials: 'include',
-                mode: 'cors',
-                body: JSON.stringify({ email, password })
-            });
-    
-            if (typeof showDebugMessage === 'function') {
-                showDebugMessage(`API 응답 상태: ${response.status}`);
-            }
-    
-            const data = await response.json();
-    
-            if (!response.ok) {
-                if (typeof showDebugMessage === 'function') {
-                    showDebugMessage(`로그인 실패: ${data.error || '알 수 없는 오류'}`);
-                }
-                throw new Error(data.error || '로그인에 실패했습니다.');
-            }
-    
-            if (!data.session || !data.user) {
-                if (typeof showDebugMessage === 'function') {
-                    showDebugMessage('응답 데이터 형식 오류: 세션 또는 사용자 정보 없음');
-                }
-                throw new Error('Invalid response data');
-            }
-    
-            if (typeof showDebugMessage === 'function') {
-                showDebugMessage('로그인 성공, 세션 저장 시도');
-            }
-            
-            // 세션 저장
+          console.log('로그인 API 호출 시작:', email);
+          
+          const response = await this.fetchWithRetry(`${this.API_URL}/auth/signin`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            credentials: 'include',
+            mode: 'cors',
+            body: JSON.stringify({ email, password })
+          });
+      
+          console.log('API 응답 상태:', response.status);
+          const data = await response.json();
+      
+          if (!response.ok) {
+            console.error('로그인 실패 응답:', data);
+            throw new Error(data.error || '로그인에 실패했습니다.');
+          }
+      
+          console.log('로그인 응답 데이터:', data);
+      
+          if (!data.session || !data.user) {
+            console.error('응답 데이터 형식 오류:', data);
+            throw new Error('서버에서 올바른 세션 정보를 받지 못했습니다.');
+          }
+      
+          console.log('세션 정보 저장 시작');
+          
+          // 세션 저장 - 첫 번째 방법 (setSession 메서드 사용)
+          try {
             this.setSession(data.session);
+            console.log('setSession 메서드로 세션 저장 완료');
+          } catch (sessionError) {
+            console.error('setSession 메서드 실패:', sessionError);
+            
+            // 두 번째 방법 - 직접 localStorage에 저장
+            try {
+              const sessionJson = JSON.stringify(data.session);
+              localStorage.setItem('session', sessionJson);
+              console.log('직접 localStorage에 세션 저장 완료');
+            } catch (directError) {
+              console.error('직접 localStorage 저장 실패:', directError);
+              
+              // 세 번째 방법 - 세션 스토리지에 시도
+              try {
+                sessionStorage.setItem('session', JSON.stringify(data.session));
+                console.log('sessionStorage에 세션 저장 완료');
+              } catch (sessionStorageError) {
+                console.error('sessionStorage 저장도 실패:', sessionStorageError);
+              }
+            }
+          }
+          
+          // 사용자 정보 저장
+          try {
             this.setUser(data.user);
+            console.log('사용자 정보 저장 완료');
+          } catch (userError) {
+            console.error('사용자 정보 저장 실패:', userError);
             
-            // 세션 확인
-            const savedSession = localStorage.getItem('session');
-            if (typeof showDebugMessage === 'function') {
-                showDebugMessage(`세션 저장 결과: ${savedSession ? '성공' : '실패'}`);
+            // 직접 저장 시도
+            try {
+              localStorage.setItem('user', JSON.stringify(data.user));
+              console.log('직접 localStorage에 사용자 정보 저장 완료');
+            } catch (directUserError) {
+              console.error('직접 사용자 정보 저장 실패:', directUserError);
             }
-            
-            return data;
+          }
+          
+          // 세션 저장 확인
+          const savedSession = localStorage.getItem('session') || sessionStorage.getItem('session');
+          console.log('세션 저장 결과:', savedSession ? '성공' : '실패');
+          
+          // 저장 실패 시 오류 발생
+          if (!savedSession) {
+            console.error('모든 세션 저장 방법 실패. 브라우저 스토리지 액세스 문제일 수 있습니다.');
+          }
+          
+          return data;
         } catch (error) {
-            if (typeof showDebugMessage === 'function') {
-                showDebugMessage(`로그인 처리 오류: ${error.message}`);
-            }
-            console.error('Login error:', error);
-            throw error;
+          console.error('로그인 처리 중 예외 발생:', error);
+          throw error;
         }
-    }
+      }
     // frontend/js/authService.js
     async initTokenRefresh() {
         try {
@@ -568,6 +596,7 @@ class AuthService {
           return '';
         }
       }
+
     setUser(user) {
         if (!user) return;
         localStorage.setItem('user', JSON.stringify(user));

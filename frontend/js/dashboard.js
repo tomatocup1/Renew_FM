@@ -23,6 +23,15 @@ export const utils = {
     }
 };
 
+function safeDebugMessage(message) {
+    console.log(message); // 항상 콘솔에는 로그 출력
+    
+    // 함수가 존재하면 호출
+    if (typeof window.showDebugMessage === 'function') {
+      window.showDebugMessage(message);
+    }
+  }
+
 class DashboardManager {
     constructor() {
         console.log('DashboardManager initialized');
