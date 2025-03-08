@@ -942,47 +942,93 @@
         }
       });
       </script>
-
-// login.html와 dashboard.html에 추가
-function showDebugMessage(message) {
-    // 디버그 메시지 컨테이너가 없으면 생성
-    let debugContainer = document.getElementById('debug-messages');
-    if (!debugContainer) {
-        debugContainer = document.createElement('div');
-        debugContainer.id = 'debug-messages';
-        debugContainer.style.cssText = `
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            width: 300px;
-            max-height: 200px;
-            overflow-y: auto;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 12px;
-            z-index: 9999;
-            border-radius: 5px;
-        `;
-        document.body.appendChild(debugContainer);
-    }
-    
-    // 메시지 추가
-    const msgElem = document.createElement('div');
-    msgElem.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
-    msgElem.style.borderBottom = '1px solid #444';
-    msgElem.style.paddingBottom = '5px';
-    msgElem.style.marginBottom = '5px';
-    
-    debugContainer.appendChild(msgElem);
-    
-    // 스크롤을 가장 아래로
-    debugContainer.scrollTop = debugContainer.scrollHeight;
-    
-    // 로그도 함께 출력
-    console.log(message);
-}
+      <script>
+        // 세션 디버그 정보 표시
+        document.addEventListener('DOMContentLoaded', () => {
+          setTimeout(() => {
+            const sessionData = localStorage.getItem('session');
+            console.log('현재 세션 데이터:', sessionData ? '존재함' : '없음');
+            
+            // 디버그 UI 추가
+            const debugDiv = document.createElement('div');
+            debugDiv.style.cssText = `
+              position: fixed;
+              top: 10px;
+              right: 10px;
+              background: rgba(0,0,0,0.8);
+              color: white;
+              padding: 10px;
+              border-radius: 5px;
+              font-size: 12px;
+              z-index: 10000;
+              max-width: 300px;
+              overflow: auto;
+            `;
+            
+            let content = '<strong>세션 디버그</strong><br>';
+            
+            if (sessionData) {
+              try {
+                const session = JSON.parse(sessionData);
+                const expiresAt = new Date(session.expires_at);
+                const now = new Date();
+                const timeLeft = Math.floor((expiresAt - now) / 1000);
+                
+                content += `토큰: ${session.access_token ? '있음' : '없음'}<br>`;
+                content += `만료: ${timeLeft > 0 ? `${timeLeft}초 남음` : '만료됨'}<br>`;
+              } catch (e) {
+                content += `세션 파싱 오류: ${e.message}<br>`;
+              }
+            } else {
+              content += '세션 데이터 없음<br>';
+            }
+            
+            // 새로고침 버튼 추가
+            content += '<button id="debugRefresh" style="margin-top:5px;padding:3px;">새로고침</button>';
+            content += ' <button id="debugClear" style="margin-top:5px;padding:3px;">세션 삭제</button>';
+            
+            debugDiv.innerHTML = content;
+            document.body.appendChild(debugDiv);
+            
+            // 이벤트 처리
+            document.getElementById('debugRefresh').addEventListener('click', () => {
+              window.location.reload();
+            });
+            
+            document.getElementById('debugClear').addEventListener('click', () => {
+              localStorage.removeItem('session');
+              localStorage.removeItem('user');
+              alert('세션 삭제됨. 로그인 페이지로 이동합니다.');
+              window.location.href = '/login.html';
+            });
+          }, 1000);
+        });
+        </script>
+        <script>
+          // 5초 후 세션 유효성 재확인
+          setTimeout(() => {
+            const sessionData = localStorage.getItem('session');
+            if (!sessionData) {
+              console.log('지연 체크: 세션 없음, 로그인으로 이동');
+              window.location.href = '/login.html';
+              return;
+            }
+            
+            try {
+              const session = JSON.parse(sessionData);
+              const expiresAt = new Date(session.expires_at).getTime();
+              const now = new Date().getTime();
+              
+              if (expiresAt <= now) {
+                console.log('지연 체크: 세션 만료됨, 로그인으로 이동');
+                window.location.href = '/login.html';
+              }
+            } catch (e) {
+              console.error('지연 세션 체크 오류:', e);
+              window.location.href = '/login.html';
+            }
+          }, 5000);
+          </script>
 <script type="module" src="js/config.js"></script>
 <script type="module" src="js/authService.js"></script>
 <script type="module" src="js/chartManager.js"></script>

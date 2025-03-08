@@ -197,71 +197,119 @@ applyCalendarStyles() {
 
     async initializeStoreSelect() {
         try {
-            const user = await authService.getCurrentUser();
-            if (!user?.id) {
-                throw new Error('User not found');
+          console.log('매장 정보 초기화 시작...');
+          
+          const user = await authService.getCurrentUser();
+          if (!user?.id) {
+            console.error('사용자 정보를 가져올 수 없습니다');
+            this.showAlert('사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.', 'error');
+            setTimeout(() => window.location.href = '/login.html', 2000);
+            return;
+          }
+          
+          console.log('사용자 정보:', user);
+          
+          // API 엔드포인트 호출
+          const response = await fetch(`${CONFIG.API_BASE_URL}/stores/user-platform-stores`, {
+            method: 'GET',
+            headers: {
+              'Authorization': authService.getAuthHeader(),
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+          });
+      
+          console.log('API 응답 상태:', response.status);
+          
+          if (!response.ok) {
+            throw new Error(`매장 정보 요청 실패 (${response.status})`);
+          }
+      
+          const stores = await response.json();
+          console.log('매장 데이터:', stores);
+      
+          if (!Array.isArray(stores) || stores.length === 0) {
+            console.warn('매장 정보가 없습니다');
+            this.showAlert('표시할 매장 정보가 없습니다. 관리자에게 매장 할당을 요청하세요.', 'warning');
+            return;
+          }
+      
+          // 중복 제거 및 포맷팅 처리
+          const uniqueStores = {};
+          stores.forEach(store => {
+            const key = `${store.store_code}-${store.platform_code || ''}`;
+            if (!uniqueStores[key]) {
+              uniqueStores[key] = store;
             }
-            
-            console.log('매장 정보 초기화 중... 사용자:', user.email, '역할:', user.role);
-    
-            // API 엔드포인트 변경 - 새로운 엔드포인트 사용
-            const response = await fetch(`${CONFIG.API_BASE_URL}/stores/user-platform-stores`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': authService.getAuthHeader(),
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include'
-            });
-    
-            if (!response.ok) {
-                console.warn('New endpoint failed, trying legacy endpoint');
-                return this.initializeStoreSelectLegacy(user.id);
-            }
-    
-            const stores = await response.json();
-            console.log('Store data:', stores);
-    
-            // 중복 매장 제거 로직 추가
-            const uniqueStores = {};
-            stores.forEach(store => {
-                const key = `${store.store_code}-${store.platform_code}`;
-                if (!uniqueStores[key]) {
-                    uniqueStores[key] = store;
-                }
-            });
-    
-            const formattedStores = Object.values(uniqueStores).map(store => ({
-                value: JSON.stringify({
-                    store_code: store.store_code,
-                    platform_code: store.platform_code || '',
-                    platform: store.platform || '배달의민족'
-                }),
-                label: store.platform_code ? 
-                       `[${store.platform || '배달의민족'}] ${store.store_name} (${store.platform_code})` :
-                       `[배달의민족] ${store.store_name}`,
-                store_code: store.store_code
-            }));
-    
-            console.log('Formatted stores:', formattedStores);
-            this.populateStoreSelectWithAllOption(formattedStores);
+          });
+      
+          const formattedStores = Object.values(uniqueStores).map(store => ({
+            value: JSON.stringify({
+              store_code: store.store_code,
+              platform_code: store.platform_code || '',
+              platform: store.platform || '배달의민족'
+            }),
+            label: store.platform_code ? 
+                   `[${store.platform || '배달의민족'}] ${store.store_name} (${store.platform_code})` :
+                   `[배달의민족] ${store.store_name}`,
+            store_code: store.store_code
+          }));
+      
+          console.log('포맷팅된 매장 목록:', formattedStores);
+          this.populateStoreSelectWithAllOption(formattedStores);
         } catch (error) {
-            console.error('Store initialization error:', error);
-            
-            try {
-                // 기존 엔드포인트로 재시도
-                return this.initializeStoreSelectLegacy(user?.id);
-            } catch (fallbackError) {
-                console.error('Legacy fallback also failed:', fallbackError);
-                // 에러 발생 시 빈 배열로 처리하여 UI는 정상 표시
-                this.populateStoreSelectWithAllOption([]);
-                
-                // 에러 메시지를 사용자에게 알림
-                this.showErrorMessage('매장 목록을 불러오는데 실패했습니다. 새로고침 후 다시 시도해주세요.');
-            }
+          console.error('매장 목록 초기화 중 오류 발생:', error);
+          this.showAlert('매장 정보를 불러오는데 실패했습니다. 새로고침 후 다시 시도해주세요.', 'error');
+          
+          // 폴백 시도
+          try {
+            await this.loadStoresFallback();
+          } catch (fallbackError) {
+            console.error('폴백 로드도 실패:', fallbackError);
+          }
         }
-    }
+      }
+      
+      // 폴백 로드 함수 추가
+      async loadStoresFallback() {
+        console.log('폴백 매장 로드 시도 중...');
+        const user = await authService.getCurrentUser();
+        
+        if (!user?.id) {
+          throw new Error('사용자 정보 없음');
+        }
+        
+        const response = await fetch(`${CONFIG.API_BASE_URL}/user/${user.id}/stores`, {
+          method: 'GET',
+          headers: {
+            'Authorization': authService.getAuthHeader(),
+            'Accept': 'application/json'
+          },
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`폴백 매장 로드 실패 (${response.status})`);
+        }
+        
+        const stores = await response.json();
+        console.log('폴백 매장 데이터:', stores);
+        
+        if (Array.isArray(stores) && stores.length > 0) {
+          const formattedStores = stores.map(store => ({
+            value: JSON.stringify({
+              store_code: store.store_code,
+              platform_code: store.platform_code || '',
+              platform: store.platform || '배달의민족'
+            }),
+            label: `${store.store_name || store.store_code}`,
+            store_code: store.store_code
+          }));
+          
+          this.populateStoreSelectWithAllOption(formattedStores);
+        }
+      }
 
     async initializeStoreSelectLegacy(userId) {
         try {

@@ -553,19 +553,21 @@ class AuthService {
 
     getAuthHeader() {
         try {
-            const session = this.getSession();
-            console.log('getAuthHeader 호출됨, 세션:', session ? '존재함' : '없음');
-            if (!session?.access_token) {
-                console.log('No access token available');
-                return '';
-            }
-            return `Bearer ${session.access_token}`;
-        } catch (error) {
-            console.error('Error getting auth header:', error);
+          const session = this.getSession();
+          console.log('getAuthHeader 호출됨, 세션:', session ? '존재함' : '없음');
+          
+          if (!session?.access_token) {
+            console.warn('토큰 없음 - 세션 데이터:', session);
             return '';
+          }
+          
+          console.log('토큰 마스킹:', session.access_token.substring(0, 10) + '...');
+          return `Bearer ${session.access_token}`;
+        } catch (error) {
+          console.error('Auth header 생성 중 오류:', error);
+          return '';
         }
-    }
-
+      }
     setUser(user) {
         if (!user) return;
         localStorage.setItem('user', JSON.stringify(user));
