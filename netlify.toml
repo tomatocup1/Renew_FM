@@ -9,9 +9,19 @@
 # 리다이렉트 설정
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  to = "/.netlify/functions/api/:splat"
   status = 200
-  force = true    # 강제 리다이렉트 추가
+  force = true
+
+  [[redirects]]
+  from = "/api/auth/user"
+  to = "/.netlify/functions/auth-user"
+  status = 200
+
+  [[redirects]]
+  from = "/api/auth/refresh-token"
+  to = "/.netlify/functions/refresh-token"
+  status = 200
 
 # 모든 경로를 index.html로 리다이렉트 (SPA 지원)
 [[redirects]]

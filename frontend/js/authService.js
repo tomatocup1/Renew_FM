@@ -1,7 +1,7 @@
 // frontend/js/authService.js
 class AuthService {
     constructor() {
-        this.API_URL = window.location.origin + '/api';
+      this.API_URL = '/.netlify/functions/api';
         this.tokenRefreshTimeouts = new Set();
         this.rateLimitRetryDelay = 1000;
         this.maxRetries = 3;
