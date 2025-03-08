@@ -20,6 +20,9 @@ router.get('/social-url/:provider', authController.getSocialLoginUrl);
 router.post('/social-login', authController.socialSignIn);
 
 // 주의: refresh-token에는 requireAuth 걸지 않는다!
-router.post('/refresh-token', authController.refreshToken);
+router.post('/refresh-token', (req, res, next) => {
+    console.log('Refresh token request received');
+    return authController.refreshToken(req, res, next);
+  });
 
 module.exports = router;

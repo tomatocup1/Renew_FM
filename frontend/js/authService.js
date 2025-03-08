@@ -257,60 +257,71 @@ class AuthService {
 
     async refreshToken() {
         if (this.isRefreshing) {
-            return new Promise((resolve) => {
-                this.retryQueue.push(resolve);
-            });
+          return new Promise((resolve) => {
+            this.retryQueue.push(resolve);
+          });
         }
-    
+      
         this.isRefreshing = true;
-    
+      
         try {
-            const session = this.getSession();
-            if (!session?.refresh_token) {
-                this.handleTokenError();
-                return null;
-            }
-    
-            const response = await fetch(`${this.API_URL}/auth/refresh-token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    refresh_token: session.refresh_token
-                })
-            });
-    
-            if (!response.ok) {
-                this.handleTokenError();
-                return null;
-            }
-    
-            const data = await response.json();
-            if (!data.session) {
-                this.handleTokenError();
-                return null;
-            }
-    
-            this.setSession(data.session);
-            this.retryQueue.forEach(resolve => resolve(data.session));
-            
-            // 토큰 갱신 후 다음 갱신 시간 설정
-            this.initTokenRefresh();
-            
-            return data.session;
-    
-        } catch (error) {
-            console.error('Token refresh error:', error);
-            this.handleTokenError();
+          const session = this.getSession();
+          if (!session?.refresh_token) {
+            console.error('리프레시 토큰이 없습니다');
+            this.clearSession();
             return null;
+          }
+      
+          console.log('토큰 갱신 시도, refresh_token 존재함');
+          
+          // 요청 URL 로깅 추가
+          const refreshUrl = `${this.API_URL}/auth/refresh-token`;
+          console.log('요청 URL:', refreshUrl);
+          
+          const response = await fetch(refreshUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              refresh_token: session.refresh_token
+            })
+          });
+      
+          // 응답 상태 로깅
+          console.log('토큰 갱신 응답 상태:', response.status);
+          
+          if (!response.ok) {
+            console.error('토큰 갱신 실패:', response.status);
+            if (response.status === 404) {
+              console.error('토큰 갱신 엔드포인트를 찾을 수 없습니다');
+            }
+            this.clearSession();
+            return null;
+          }
+      
+          const data = await response.json();
+          if (!data.session) {
+            console.error('토큰 갱신 응답에 세션 정보가 없습니다');
+            this.clearSession();
+            return null;
+          }
+      
+          console.log('토큰 갱신 성공');
+          this.setSession(data.session);
+          
+          return data.session;
+        } catch (error) {
+          console.error('토큰 갱신 중 예외 발생:', error);
+          this.clearSession();
+          return null;
         } finally {
-            this.isRefreshing = false;
-            this.retryQueue = [];
+          this.isRefreshing = false;
+          this.retryQueue = [];
         }
-    }
+      }
     
     handleTokenError() {
         // 토큰 에러 발생 시 세션 정보만 지우고, 현재 페이지 정보는 유지
@@ -444,55 +455,23 @@ class AuthService {
         }
         
         try {
-          console.log('세션 저장 시작');
-          
           // 객체인 경우 문자열로 변환
-          let sessionStr = session;
-          if (typeof session !== 'string') {
-            sessionStr = JSON.stringify(session);
-          }
+          const sessionStr = typeof session === 'string' ? session : JSON.stringify(session);
           
-          // localStorage에 저장 시도
-          try {
-            localStorage.setItem('session', sessionStr);
-            console.log('localStorage에 세션 저장 성공');
-          } catch (localStorageError) {
-            console.error('localStorage 저장 실패:', localStorageError);
-          }
-          
-          // sessionStorage에도 저장 (백업)
-          try {
-            sessionStorage.setItem('session', sessionStr);
-            console.log('sessionStorage에 세션 저장 성공');
-          } catch (sessionStorageError) {
-            console.error('sessionStorage 저장 실패:', sessionStorageError);
-          }
-          
-          // 쿠키에 저장 시도 (SameSite 설정 중요)
-          try {
-            const cookieOptions = [
-              'path=/',
-              `max-age=${24 * 60 * 60}`,
-              'samesite=lax' // SameSite 설정 (Lax가 가장 안전하고 호환성 높음)
-            ];
-            
-            // HTTPS인 경우 secure 플래그 추가
-            if (window.location.protocol === 'https:') {
-              cookieOptions.push('secure');
-            }
-            
-            const cookieStr = `session=${encodeURIComponent(sessionStr)}; ${cookieOptions.join('; ')}`;
-            document.cookie = cookieStr;
-            console.log('쿠키에 세션 저장 성공');
-          } catch (cookieError) {
-            console.error('쿠키 저장 실패:', cookieError);
-          }
+          // localStorage에 저장 - 한 번에 확실하게 저장
+          localStorage.setItem('session', sessionStr);
+          console.log('세션 저장 완료:', new Date().toISOString());
           
           // 토큰 갱신 타이머 설정
           this.initTokenRefresh();
-          console.log('토큰 갱신 타이머 설정 완료');
         } catch (error) {
-          console.error('세션 저장 중 예외 발생:', error);
+          console.error('세션 저장 중 오류:', error);
+          // 백업으로 sessionStorage 시도
+          try {
+            sessionStorage.setItem('session', typeof session === 'string' ? session : JSON.stringify(session));
+          } catch (e) {
+            console.error('sessionStorage 저장도 실패:', e);
+          }
         }
       }
 

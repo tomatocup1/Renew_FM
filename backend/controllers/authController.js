@@ -375,25 +375,31 @@ exports.getSocialLoginUrl = async (req, res) => {
         });
     }
 };
+
 exports.refreshToken = async (req, res) => {
     try {
+        console.log('리프레시 토큰 요청 수신:', req.path, req.method);
         const { refresh_token } = req.body;
+        
         if (!refresh_token) {
+            console.log('리프레시 토큰 없음');
             return res.status(400).json({ error: '리프레시 토큰이 없습니다.' });
         }
-
+        
+        console.log('리프레시 토큰 확인됨, Supabase에 요청');
         const { data, error } = await supabase.auth.refreshSession({ 
             refresh_token 
         });
 
         if (error) {
-            // 401 상태 코드로 변경하여 프론트엔드에서 로그인 페이지로 리다이렉션
+            console.error('Supabase 토큰 갱신 실패:', error);
             return res.status(401).json({ 
                 error: '토큰 갱신 실패',
                 code: 'TOKEN_REFRESH_FAILED'
             });
         }
 
+        console.log('토큰 갱신 성공, 응답 전송');
         res.json({
             session: {
                 access_token: data.session.access_token,
@@ -402,6 +408,7 @@ exports.refreshToken = async (req, res) => {
             }
         });
     } catch (err) {
+        console.error('토큰 갱신 처리 중 예외:', err);
         res.status(401).json({ 
             error: '토큰 갱신 실패',
             code: 'TOKEN_REFRESH_FAILED'
