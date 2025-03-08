@@ -1,20 +1,11 @@
 [build]
-  # 빌드 명령어(필요시 수정)
   command = "npm install && npm run build"
-  # 배포할 정적 파일 디렉토리
   publish = "frontend"
-  # 서버리스 함수 디렉토리
   functions = "netlify/functions"
 
-# 리다이렉트 설정
+# 기존 인증 리다이렉트 유지
 [[redirects]]
   from = "/api/auth/user"
-  to = "/.netlify/functions/auth-user"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/.netlify/functions/api/auth/user"
   to = "/.netlify/functions/auth-user"
   status = 200
   force = true
@@ -26,24 +17,61 @@
   force = true
 
 [[redirects]]
-  from = "/.netlify/functions/api/auth/refresh-token"
-  to = "/.netlify/functions/refresh-token"
-  status = 200
-  force = true
-
-  [[redirects]]
   from = "/api/auth/signin"
   to = "/.netlify/functions/signin"
   status = 200
   force = true
 
+# 매장 관련 API 리다이렉트 추가
 [[redirects]]
-  from = "/.netlify/functions/api/auth/signin"
-  to = "/.netlify/functions/signin"
+  from = "/api/stores/user-platform-stores"
+  to = "/.netlify/functions/stores-user-platform"
   status = 200
   force = true
 
-# 모든 경로를 index.html로 리다이렉트 (SPA 지원)
+[[redirects]]
+  from = "/api/user/:userId/stores"
+  to = "/.netlify/functions/user-stores?userId=:userId"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/stores/user/:userId/stores"
+  to = "/.netlify/functions/stores-user-stores?userId=:userId"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/users/:userId/stores"
+  to = "/.netlify/functions/users-stores?userId=:userId"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/stats/details"
+  to = "/.netlify/functions/stats-details"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/stores/all"
+  to = "/.netlify/functions/stores-all"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/stores/users"
+  to = "/.netlify/functions/stores-users"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/stores/assignments"
+  to = "/.netlify/functions/stores-assignments"
+  status = 200
+  force = true
+
+# 최종 폴백 리다이렉트
 [[redirects]]
   from = "/*"
   to = "/index.html"
