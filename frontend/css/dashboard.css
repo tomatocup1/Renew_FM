@@ -1,0 +1,269 @@
+/* dashboard.css */
+/* 컨테이너 최대 너비 확장 */
+.container {
+  max-width: 1800px;  /* 기존 1600px에서 확장 */
+  margin: 1.5rem auto;
+  padding: 0 1rem;
+}
+
+/* 대시보드 그리드 비율 개선 */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;  /* 캘린더 영역 확장 */
+  gap: 2rem;  /* 간격 확대 */
+  height: calc(100vh - 160px);
+}
+
+/* 캘린더 섹션 스타일 개선 */
+.calendar-section {
+  background: white;
+  padding: 1.75rem; 1rem;
+  overflow: visible;
+  border-radius: 15px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  height: 100%;
+  overflow-y: auto;
+}
+
+.calendar-section h3 {
+  margin-bottom: 1.5rem;
+  font-size: 1.25rem;
+  color: #333;
+  font-weight: 600;
+}
+
+/* 통계 섹션 스타일 개선 */
+.stats-section {
+  background: white;
+  padding: 1.75rem;
+  border-radius: 15px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* 통계 카드 개선 */
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 2.5rem;
+}
+
+.stat-card {
+  background: white;
+  padding: 1.4rem;
+  border-radius: 12px;
+  text-align: center;
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0.7rem 0;
+}
+
+.stat-label {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+/* 차트 컨테이너 개선 */
+.chart-container {
+  margin: 2.5rem 0;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 12px;
+  height: 350px;  /* 차트 높이 증가 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* 테이블 스타일 개선 */
+.stats-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-bottom: 2.5rem;
+}
+
+.stats-table th {
+  background-color: #f7f9fc;
+  font-weight: 600;
+  padding: 1.2rem 1rem;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.stats-table td {
+  padding: 1.2rem 1rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.stats-table tr:hover td {
+  background-color: #f8f9fa;
+}
+
+/* 리뷰 섹션 개선 */
+.reviews-container {
+  margin-top: 2.5rem;
+  background: white;
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.reviews-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: #f7f9fc;
+}
+
+.reviews-header h3 {
+  font-size: 1.25rem;
+  color: #333;
+  font-weight: 600;
+  margin: 0;
+}
+
+.review-row {
+  border-bottom: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.review-row:hover {
+  background-color: #f8f9fa;
+}
+
+.review-main {
+  padding: 1.75rem;
+}
+
+.review-response {
+  padding: 1.75rem;
+  background: #f9f9f9;
+}
+
+.ai-response {
+  background-color: white;
+  border-radius: 10px;
+  padding: 1.25rem;
+  font-size: 1rem;
+  line-height: 1.7;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* 반응형 개선 */
+@media (max-width: 1600px) {
+  .stats-cards {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 1280px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .calendar-section {
+    height: auto;
+    max-height: 600px;
+  }
+  
+  .stats-cards {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .review-main {
+    grid-template-columns: 90px 90px 50px 1fr;
+    padding: 1rem;
+    gap: 0.5rem;
+  }
+  
+  .review-response {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .review-main {
+    grid-template-columns: 80px 80px 40px 1fr;
+    padding: 0.75rem;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+  }
+}
+/* 전체 레이아웃 */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Noto Sans', 'Roboto', sans-serif;
+    background-color: #f4f4f4;
+  }
+  
+  /* 메인 컨테이너 */
+  .container {
+    width: 90%;
+    max-width: 1200px;
+    margin: 40px auto;
+    background: #fff;
+    border-radius: 6px;
+    padding: 20px 30px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* 제목 스타일링 */
+  h1 {
+    margin-bottom: 20px;
+  }
+  
+  /* 필터 섹션 (선택) */
+  .filter-section {
+    margin-bottom: 20px;
+  }
+  
+  /* 테이블 스타일 */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  table th, table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+  }
+  
+  /* 헤더 스타일 */
+  table thead th {
+    background-color: #f2f2f2;
+    font-weight: 600;
+  }
+  
+  /* 짝수 행 배경색 */
+  table tbody tr:nth-child(even) {
+    background-color: #fafafa;
+  }
+  
+  /* 마지막 행 아래쪽 여백 제거 */
+  table tbody tr:last-child td {
+    border: none;
+  }
+  

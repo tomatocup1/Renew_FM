@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>소셜 로그인 처리 중...</title>
+    <style>
+        body {
+            font-family: 'Pretendard', -apple-system, system-ui, sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .loading-container {
+            background-color: white;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4CAF50;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            animation: spin 1s linear infinite;
+        }
+        
+        .loading-text {
+            font-size: 1.1rem;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .loading-subtext {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .error-message {
+            color: #f44336;
+            margin-top: 16px;
+            font-size: 0.9rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-container">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">소셜 로그인 처리 중...</div>
+        <div class="loading-subtext">잠시만 기다려주세요.</div>
+        <div id="errorMessage" class="error-message"></div>
+    </div>
+
+    <script type="module">
+        import { authService } from './js/authService.js';
+        
+        async function handleAuthCallback() {
+            try {
+                // URL에서 인증 결과 파싱
+                const authResult = authService.parseAuthResult();
+                
+                // 에러 메시지 요소
+                const errorMessageEl = document.getElementById('errorMessage');
+                
+                // 인증 결과가 없으면 에러 표시
+                if (!authResult) {
+                    errorMessageEl.textContent = '인증 정보를 찾을 수 없습니다.';
+                    setTimeout(() => window.location.href = '/login.html', 3000);
+                    return;
+                }
+                
+                // 소셜 로그인 처리
+                await authService.processSocialLogin(
+                    authResult.provider, 
+                    authResult.access_token
+                );
+                
+                // 대시보드로 리디렉션
+                window.location.href = '/dashboard.html';
+                
+            } catch (error) {
+                console.error('Auth callback error:', error);
+                
+                // 에러 메시지 표시
+                const errorMessageEl = document.getElementById('errorMessage');
+                errorMessageEl.textContent = error.message || '인증 처리 중 오류가 발생했습니다.';
+                
+                // 3초 후 로그인 페이지로 리디렉션
+                setTimeout(() => {
+                    const errorMsg = encodeURIComponent(error.message || '인증 처리 중 오류가 발생했습니다.');
+                    window.location.href = `/login.html?error=${errorMsg}`;
+                }, 3000);
+            }
+        }
+        
+        // 페이지 로드 시 인증 콜백 처리
+        document.addEventListener('DOMContentLoaded', handleAuthCallback);
+    </script>
+</body>
+</html>

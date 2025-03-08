@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그인</title>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --error-color: #f44336;
+            --google-color: #4285F4;
+            --kakao-color: #FEE500;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, system-ui, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .login-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            margin: 1rem;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .login-header h1 {
+            color: #333;
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #555;
+            font-size: 0.9rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #43a047;
+        }
+        
+        .btn-google {
+            background-color: white;
+            color: #333;
+            border: 1px solid #ddd;
+            margin-bottom: 0.75rem;
+        }
+        
+        .btn-google:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .btn-kakao {
+            background-color: var(--kakao-color);
+            color: #333;
+            margin-bottom: 0.75rem;
+        }
+        
+        .btn-kakao:hover {
+            background-color: #FDD835;
+        }
+
+        .error-message {
+            color: var(--error-color);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+        
+        .social-divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 1.5rem 0;
+        }
+        
+        .social-divider::before,
+        .social-divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .social-divider span {
+            padding: 0 10px;
+            color: #777;
+            font-size: 0.9rem;
+        }
+        
+        .social-login-btn-container {
+            margin-bottom: 1.5rem;
+        }
+        
+        .social-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>로그인</h1>
+            <p>리뷰 대시보드 관리자 시스템</p>
+        </div>
+        
+        <div class="social-login-btn-container">
+            <button id="googleLoginBtn" class="btn btn-google">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" class="social-icon">
+                Google 계정으로 로그인
+            </button>
+            
+            <button id="kakaoLoginBtn" class="btn btn-kakao">
+                <img src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png" alt="Kakao" class="social-icon">
+                카카오 계정으로 로그인
+            </button>
+        </div>
+        
+        <div class="social-divider">
+            <span>또는</span>
+        </div>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">이메일</label>
+                <input type="email" id="email" class="form-control" required>
+                <div class="error-message" id="emailError"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">비밀번호</label>
+                <input type="password" id="password" class="form-control" required>
+                <div class="error-message" id="passwordError"></div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">로그인</button>
+            <div class="error-message" id="loginError"></div>
+
+            <div style="text-align: center; margin-top: 1.5rem;">
+                <a href="./signup.html" class="btn" style="text-decoration: none; color: #555; font-size: 0.95rem;">
+                    계정이 없으신가요? 회원가입하기
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <script type="module">
+        import { authService } from './js/authService.js';
+    
+        class LoginManager {
+            constructor() {
+                this.form = document.getElementById('loginForm');
+                this.googleLoginBtn = document.getElementById('googleLoginBtn');
+                this.kakaoLoginBtn = document.getElementById('kakaoLoginBtn');
+                this.initializeEventListeners();
+                this.checkAuthState();
+            }
+    
+            initializeEventListeners() {
+                this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+                this.googleLoginBtn.addEventListener('click', () => this.handleSocialLogin('google'));
+                this.kakaoLoginBtn.addEventListener('click', () => this.handleSocialLogin('kakao'));
+            }
+    
+            // 소셜 로그인 처리
+            async handleSocialLogin(provider) {
+                try {
+                    // 로딩 상태 표시
+                    this.showLoadingState(provider, true);
+                    
+                    // 소셜 로그인 URL 요청
+                    const result = await authService.getSocialLoginUrl(provider);
+                    
+                    if (result && result.url) {
+                        // 소셜 로그인 페이지로 리디렉션
+                        window.location.href = result.url;
+                    } else {
+                        this.showError('소셜 로그인 URL을 가져오는데 실패했습니다.');
+                    }
+                } catch (error) {
+                    console.error(`${provider} login error:`, error);
+                    this.showError(error.message || `${provider} 로그인에 실패했습니다.`);
+                    this.showLoadingState(provider, false);
+                }
+            }
+            
+            // 로딩 상태 표시
+            showLoadingState(provider, isLoading) {
+                const button = provider === 'google' ? this.googleLoginBtn : this.kakaoLoginBtn;
+                const originalText = provider === 'google' ? 'Google 계정으로 로그인' : '카카오 계정으로 로그인';
+                const loadingText = '로그인 중...';
+                
+                button.disabled = isLoading;
+                button.innerHTML = isLoading 
+                    ? `<span class="social-icon"></span>${loadingText}` 
+                    : `<img src="${provider === 'google' 
+                        ? 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' 
+                        : 'https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png'}" 
+                        alt="${provider}" class="social-icon">${originalText}`;
+            }
+    
+            // 이미 로그인되어 있는지 확인
+            async checkAuthState() {
+                if (authService.isAuthenticated()) {
+                    window.location.href = './dashboard.html';
+                }
+                
+                // URL 파라미터에서 에러 확인
+                const urlParams = new URLSearchParams(window.location.search);
+                const error = urlParams.get('error');
+                if (error) {
+                    this.showError(decodeURIComponent(error));
+                }
+            }
+    
+            // 에러 메시지 초기화
+            clearErrors() {
+                document.querySelectorAll('.error-message').forEach(el => {
+                    el.classList.remove('show');
+                    el.textContent = '';
+                });
+            }
+    
+            // 에러 메시지 표시
+            showError(message) {
+                const loginError = document.getElementById('loginError');
+                loginError.textContent = message;
+                loginError.classList.add('show');
+            }
+    
+            // 로그인 처리
+            async handleSubmit(e) {
+                e.preventDefault();
+                this.clearErrors();
+    
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+    
+                // 입력값 검증
+                if (!email || !password) {
+                    this.showError('이메일과 비밀번호를 모두 입력해주세요.');
+                    return;
+                }
+    
+                try {
+                    // 로딩 상태 표시
+                    const submitButton = this.form.querySelector('button[type="submit"]');
+                    submitButton.disabled = true;
+                    submitButton.textContent = '로그인 중...';
+    
+                    // authService를 통한 로그인 시도
+                    await authService.login(email, password);
+                    
+                    // 로그인 성공 시 대시보드로 이동
+                    window.location.href = './dashboard.html';
+    
+                } catch (error) {
+                    console.error('Login error:', error);
+                    this.showError(error.message || '로그인에 실패했습니다.');
+    
+                } finally {
+                    // 로딩 상태 복원
+                    const submitButton = this.form.querySelector('button[type="submit"]');
+                    submitButton.disabled = false;
+                    submitButton.textContent = '로그인';
+                }
+            }
+        }
+    
+        // 페이지 로드 시 LoginManager 초기화
+        document.addEventListener('DOMContentLoaded', () => {
+            new LoginManager();
+        });
+    </script>
+</body>
+</html>

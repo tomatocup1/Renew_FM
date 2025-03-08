@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>리뷰 대시보드</title>
+
+  <!-- 달력, 차트 라이브러리 CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>  
+
+  <style>
+    /* ======== 공통 스타일 ======== */
+    :root {
+      --primary-color: #4CAF50;
+      --secondary-color: #2196F3;
+      --background-color: #f8f9fa;
+      --border-color: #e9ecef;
+      --text-color: #495057;
+      --shadow: 0 2px 4px rgba(0,0,0,0.1);
+
+      /* Status Colors */
+      --status-pending-bg: #fff3cd;
+      --status-pending-text: #856404;
+      --status-completed-bg: #d4edda;
+      --status-completed-text: #155724;
+      --status-failed-bg: #f8d7da;
+      --status-failed-text: #721c24;
+
+      /* Rating Colors */
+      --rating-5-color: #4CAF50;
+      --rating-4-color: #8BC34A;
+      --rating-3-color: #FFC107;
+      --rating-2-color: #FF9800;
+      --rating-1-color: #F44336;
+      
+      /* Needs Reply Color */
+      --needs-reply-color: #FF9800;
+      --needs-reply-bg: #fff8e6;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      line-height: 1.5;
+      padding-top: 60px; /* 네비게이터 높이만큼 여백 추가 */
+    }
+
+    /* ======== 네비게이터 스타일 시작 ======== */
+    .nav-container {
+      width: 100%;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 100;
+    }
+
+    .nav-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+    }
+
+    .nav-logo {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #333;
+      text-decoration: none;
+    }
+
+    .nav-menu {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+    }
+
+    .nav-link {
+      color: #666;
+      text-decoration: none;
+      font-weight: 500;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+
+    .nav-link:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .nav-user {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .nav-button {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      border: none;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .nav-button.primary {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .nav-button.primary:hover {
+      background: #43A047;
+    }
+
+    .mobile-menu {
+      display: none;
+      padding: 1rem;
+      background: white;
+      border-top: 1px solid #eee;
+    }
+
+    /* 모바일 메뉴 버튼 (기본적으로 숨김) */
+    .mobile-only {
+      display: none; 
+    }
+
+    /* ======== 네비게이터 반응형 스타일 ======== */
+    @media (max-width: 768px) {
+      .nav-menu, 
+      .nav-user {
+        display: none;
+      }
+      
+      .mobile-menu {
+        display: block;
+      }
+      
+      .mobile-menu .nav-link {
+        display: block;
+        padding: 0.75rem 0;
+      }
+      
+      /* 모바일에서만 메뉴 버튼 표시 */
+      .mobile-only {
+        display: block;
+      }
+    }
+    /* ======== 네비게이터 스타일 끝 ======== */
+
+    .container {
+      max-width: 1600px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+    }
+
+    /* ======== 대시보드 헤더 스타일 시작 ======== */
+    .dashboard-header {
+      background: #ffffff;
+      padding: 2rem;
+      border-radius: 15px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .header-main {
+      flex: 1;
+      min-width: 250px;
+    }
+
+    .header-controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .dashboard-title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin: 0;
+      margin-bottom: 0.5rem;
+    }
+
+    .dashboard-subtitle {
+      font-size: 1rem;
+      color: #666;
+    }
+
+    .store-select {
+      min-width: 300px;
+      padding: 0.75rem 1rem;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 1rem;
+      background-color: white;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .store-select:hover {
+      border-color: #4CAF50;
+    }
+
+    .store-select:focus {
+      border-color: #4CAF50;
+      box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+      outline: none;
+    }
+
+    .refresh-button {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      background-color: #f1f8f1;
+      color: #4CAF50;
+      border: 1px solid #e0f2e0;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .refresh-button:hover {
+      background-color: #e8f5e9;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    /* ======== 대시보드 헤더 스타일 끝 ======== */
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 350px 1fr; /* 캘린더 영역 좌측, 통계 영역 우측 */
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+      min-height: 600px; /* 최소 높이 설정 */
+      height: auto; /* 자동 높이로 변경하여 내용에 맞게 조정 */
+    }
+
+    /* 캘린더 섹션 수정 */
+    .calendar-section {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 15px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      height: auto; /* 내용에 맞게 자동 높이 */
+      max-height: calc(100vh - 200px); /* 최대 높이 제한 */
+      overflow-y: auto; /* 내용이 넘칠 경우 스크롤 */
+      position: sticky;
+      top: 80px; /* 네비게이션 바 아래에 고정 */
+    }
+
+    /* 통계 섹션 수정 */
+    .stats-section {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 15px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      height: auto; /* 내용에 맞게 자동 높이 */
+      display: flex; /* flex 레이아웃 사용 */
+      flex-direction: column; /* 수직 배치 */
+    }
+            
+    .stats-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.75rem; /* 간격 약간 줄임 */
+      margin-bottom: 1rem; /* 여백 줄임 */
+    }
+
+    .stat-card {
+      background: white;
+      padding: 1.2rem 1rem;
+      border-radius: 12px;
+      text-align: center;
+      transition: all 0.2s ease;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    .stat-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+    }
+    .stat-card[data-rating="5"] {
+      border-left: 4px solid var(--rating-5-color);
+    }
+
+    .stat-card[data-rating="4"] {
+      border-left: 4px solid var(--rating-4-color);
+    }
+
+    .stat-card[data-rating="3"] {
+      border-left: 4px solid var(--rating-3-color);
+    }
+
+    .stat-card[data-rating="2"] {
+      border-left: 4px solid var(--rating-2-color);
+    }
+
+    .stat-card[data-rating="1"] {
+      border-left: 4px solid var(--rating-1-color);
+    }
+
+    .stat-card[data-filter="needs_reply"] {
+      border-left: 4px solid var(--needs-reply-color);
+      background-color: var(--needs-reply-bg);
+    }
+
+    .stat-card:not([data-rating]):not([data-filter]) {
+      cursor: default;
+    }
+    
+    .stat-card[data-rating]:hover,
+    .stat-card[data-filter]:hover {
+      background-color: var(--background-color);
+      cursor: pointer;
+    }
+    
+    .stat-card.active {
+      background-color: var(--background-color);
+      border-color: var(--secondary-color);
+    }
+    
+    .stat-card[data-filter="needs_reply"] {
+      background-color: var(--needs-reply-bg);
+      border-color: var(--needs-reply-color);
+    }
+    
+    .stat-card[data-filter="needs_reply"].active {
+      background-color: var(--needs-reply-color);
+      color: white;
+    }
+    
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: var(--text-color);
+      margin: 0.5rem 0;
+    }
+    
+    .stat-card[data-filter="needs_reply"] .stat-value {
+      color: var(--needs-reply-color);
+    }
+    
+    .stat-card[data-filter="needs_reply"].active .stat-value {
+      color: white;
+    }
+    
+    .stat-label {
+      font-size: 0.9rem;
+      color: #666;
+      font-weight: 500;
+    }
+    
+    .chart-container {
+      margin: 1rem 0;
+      background: white;
+      border-radius: 12px;
+      height: 220px; /* 높이 약간 줄임 */
+      border: 1px solid var(--border-color);
+      padding: 1rem;
+    }
+
+    /* 리뷰 컨테이너 수정 */
+    .reviews-container {
+      margin-top: 1rem;
+      margin-bottom: 1rem;
+      background: white;
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      flex: 1; /* 남은 공간 모두 차지 */
+      min-height: 400px; /* 최소 높이 설정 */
+      max-height: calc(100vh - 450px); /* 최대 높이를 더 크게 설정 */
+      overflow-y: auto; /* 리뷰가 많을 경우 스크롤 */
+      display: flex;
+      flex-direction: column;
+    }
+    #reviewsBody {
+      flex: 1;
+      overflow-y: auto;
+    }
+    /* 리뷰 헤더 고정 */
+    .reviews-header {
+      position: sticky;
+      top: 0;
+      background: white;
+      z-index: 1;
+      padding: 1.2rem 1.5rem; /* 패딩 약간 줄임 */
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .review-list-header {
+      position: sticky;
+      top: 60px; /* reviews-header 높이 + 패딩 (줄임) */
+      background: white;
+      z-index: 1;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .reviews-header h3 {
+      font-size: 1.2rem;
+      color: #1a1a1a;
+    }
+    
+    .review-row {
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .review-row:last-child {
+      border-bottom: none;
+    }
+    
+    .review-row.needs-attention {
+      background-color: var(--needs-reply-bg);
+    }
+    
+    .review-main {
+      display: grid;
+      grid-template-columns: 120px 120px 80px 1fr;
+      gap: 1rem;
+      padding: 1.5rem;
+      background: white;
+      align-items: center;
+    }
+    
+    .review-row.needs-attention .review-main {
+      background-color: var(--needs-reply-bg);
+    }
+    
+    .review-response {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 1rem;
+      padding: 1.5rem;
+      background: var(--background-color);
+      border-top: 1px solid var(--border-color);
+      align-items: start;
+    }
+    
+    .review-row.needs-attention .review-response {
+      background-color: #fff5e0;
+    }
+    
+    .review-date,
+    .review-author {
+      color: var(--text-color);
+      font-size: 0.95rem;
+    }
+    
+    .review-content {
+      line-height: 1.6;
+      white-space: pre-line;
+    }
+
+    /* 테이블 컨테이너 */
+    .table-container {
+      margin-bottom: 1.5rem;
+      overflow-x: auto; /* 가로 스크롤 추가 */
+    }
+    
+    .rating {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 500;
+      text-align: center;
+      min-width: 40px;
+    }
+    
+    .rating-5 { background-color: var(--rating-5-color); color: white; }
+    .rating-4 { background-color: var(--rating-4-color); color: white; }
+    .rating-3 { background-color: var(--rating-3-color); }
+    .rating-2 { background-color: var(--rating-2-color); color: white; }
+    .rating-1 { background-color: var(--rating-1-color); color: white; }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.4rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      text-align: center;
+      min-width: 80px;
+    }
+    
+    .status-badge.pending {
+      background-color: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeeba;
+    }
+    
+    .status-badge.completed {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .status-badge.failed {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .badge-needs-reply {
+      display: inline-block;
+      padding: 2px 6px;
+      background-color: var(--needs-reply-color);
+      color: white;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      margin-left: 6px;
+    }
+    
+    .ai-response {
+      background-color: white;
+      border-radius: 8px;
+      padding: 1rem;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      white-space: pre-line;
+      box-shadow: var(--shadow);
+    }
+    
+    .ai-response.no-response {
+      background-color: transparent;
+      color: #999;
+      font-style: italic;
+      box-shadow: none;
+    }
+    
+    .stats-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-bottom: 2rem;
+    }
+    
+    .stats-table th,
+    .stats-table td {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .stats-table th {
+      background-color: var(--background-color);
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    
+    .flatpickr-calendar {
+      width: 100% !important;
+      max-width: 360px !important; /* 최대 너비 증가 */
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+      border-radius: 12px !important;
+      padding: 0.75rem !important; /* 패딩 약간 줄임 */
+      margin: 0 auto !important; /* 중앙 정렬 */
+      font-size: 0.95rem; /* 폰트 크기 약간 줄임 */
+    }
+    /* 요일 표시 최적화 */
+    .flatpickr-weekday {
+      width: 14.28% !important;
+      max-width: none !important;
+      flex: 1 !important;
+      font-weight: 600 !important;
+      font-size: 90% !important; /* 글자 크기 약간 줄임 */
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+
+    /* 날짜 셀 최적화 */
+    .flatpickr-day {
+      margin: 1px !important;
+      height: 36px !important; /* 높이 약간 줄임 */
+      line-height: 36px !important;
+      border-radius: 4px !important;
+    }
+
+    .loading-indicator {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.8);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #4CAF50;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    .loading-text {
+      margin-top: 15px;
+      font-size: 16px;
+      color: #333;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* ======== 반응형 스타일 시작 ======== */
+    @media (max-width: 1280px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .calendar-section {
+        height: auto;
+        max-height: none; /* 높이 제한 제거 */
+        padding: 1.5rem;
+        overflow: visible;
+      }
+      
+      .flatpickr-calendar {
+        max-width: 420px !important; /* 모바일에서는 더 크게 */
+        margin: 0 auto !important;
+      }
+    }
+    
+    @media (max-width: 1024px) {
+      .dashboard-grid {
+        grid-template-columns: 300px 1fr;
+      }
+      .stats-cards {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .review-main {
+        grid-template-columns: 100px 100px 60px 1fr;
+        gap: 0.5rem;
+        padding: 1rem;
+      }
+      .review-response {
+        grid-template-columns: 100px 1fr;
+        gap: 0.5rem;
+        padding: 1rem;
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .review-main {
+        grid-template-columns: 100px 100px 60px 1fr;
+        font-size: 0.9rem;
+      }
+      .ai-response {
+        font-size: 0.9rem;
+      }
+    }
+    
+    /* 대시보드 헤더 반응형 스타일 */
+    @media (max-width: 768px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+      }
+      
+      .calendar-section {
+        position: static;
+        height: auto;
+        max-height: none;
+      }
+      
+      .reviews-container {
+        max-height: 500px;
+      }
+      .stats-cards {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .dashboard-header {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 1.5rem;
+      }
+      .header-controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .dashboard-title {
+        text-align: center;
+      }
+      
+      .store-select {
+        width: 100%;
+        min-width: auto;
+      }
+      
+      .stats-cards {
+        grid-template-columns: 1fr;
+      }
+      
+      .review-main {
+        grid-template-columns: 80px 80px 50px 1fr;
+      }
+      .refresh-button {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+    @media (max-width: 576px) {
+  .stats-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 캘린더 스타일 개선 */
+.flatpickr-calendar {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.flatpickr-days {
+  width: 100% !important;
+}
+
+.dayContainer {
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+}
+
+.flatpickr-day {
+  max-width: none !important;
+  height: 40px !important;
+  line-height: 40px !important;
+  margin: 2px !important;
+  border-radius: 8px !important;
+  flex-basis: calc(14.28% - 4px) !important;
+}
+
+.flatpickr-day.selected {
+  background: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+}
+    /* ======== 반응형 스타일 끝 ======== */
+  </style>
+</head>
+<body>
+  <!-- 네비게이터 시작 -->
+  <nav class="nav-container">
+    <div class="nav-content">
+      <a href="/" class="nav-logo">로고</a>
+      <!-- 모바일 전용 메뉴 버튼 -->
+      <button id="mobileMenuBtn" class="nav-button mobile-only">
+        <span>메뉴</span>
+      </button>
+      <div class="nav-menu" id="navMenu">
+        <a href="/sitemap.html" class="nav-link">사이트맵</a>
+        <a href="/dashboard.html" class="nav-link">리뷰관리</a>
+        <a href="/admin/store-manager" class="nav-link">영업관리</a>
+        <a href="/rules.html" class="nav-link">답글규칙설정</a>
+      </div>
+      <div class="nav-user">
+        <a href="/profile.html" class="nav-link">내 정보</a>
+        <button id="logoutBtn" class="nav-button primary">로그아웃</button>
+      </div>
+    </div>
+    <!-- 모바일 확장 메뉴 (기본적으로 숨겨짐) -->
+    <div id="mobileMenu" class="mobile-menu hidden">
+      <a href="/sitemap.html" class="nav-link">사이트맵</a>
+      <a href="/dashboard.html" class="nav-link">리뷰관리</a>
+      <a href="/admin/store-manager" class="nav-link">영업관리</a>
+      <a href="/rules.html" class="nav-link">답글규칙설정</a>
+      <a href="/profile.html" class="nav-link">내 정보</a>
+      <button id="mobileLogoutBtn" class="nav-button primary">로그아웃</button>
+    </div>
+  </nav>
+  <!-- 네비게이터 끝 -->
+
+  <div class="container">
+    <!-- 대시보드 헤더 -->
+    <div class="dashboard-header">
+      <div class="header-main">
+        <h1 class="dashboard-title">리뷰 통계 대시보드</h1>
+        <div class="dashboard-subtitle">고객 리뷰를 효과적으로 관리하고 분석하세요</div>
+      </div>
+      <div class="header-controls">
+        <select id="storeSelect" class="store-select">
+          <option value="">매장 선택</option>
+        </select>
+        <button id="refreshButton" class="refresh-button">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/>
+          </svg>
+          <span>새로고침</span>
+        </button>
+      </div>
+    </div>
+    
+
+    <div class="dashboard-grid">
+      <!-- 왼쪽: 달력 -->
+      <div class="calendar-section">
+        <h3>날짜 선택</h3>
+        <div id="calendar"></div>
+      </div>
+
+      <!-- 오른쪽: 통계 섹션 -->
+      <div class="stats-section">
+        <!-- 통계 카드 -->
+        <div class="stats-cards">
+          <div class="stat-card">
+            <div class="stat-label">전체 리뷰 수</div>
+            <div class="stat-value" id="totalReviews">0</div>
+          </div>
+          <div class="stat-card" data-filter="needs_reply">
+            <div class="stat-label">확인 필요</div>
+            <div class="stat-value" id="needsReplyCount">0</div>
+          </div>
+          <div class="stat-card" data-rating="5">
+            <div class="stat-label">5점 리뷰</div>
+            <div class="stat-value" id="rating5Count">0</div>
+          </div>
+          <div class="stat-card" data-rating="4">
+            <div class="stat-label">4점 리뷰</div>
+            <div class="stat-value" id="rating4Count">0</div>
+          </div>
+          <div class="stat-card" data-rating="3">
+            <div class="stat-label">3점 리뷰</div>
+            <div class="stat-value" id="rating3Count">0</div>
+          </div>
+          <div class="stat-card" data-rating="2">
+            <div class="stat-label">2점 리뷰</div>
+            <div class="stat-value" id="rating2Count">0</div>
+          </div>
+          <div class="stat-card" data-rating="1">
+            <div class="stat-label">1점 리뷰</div>
+            <div class="stat-value" id="rating1Count">0</div>
+          </div>
+        </div>
+
+        <!-- 차트 -->
+        <div class="chart-container">
+          <canvas id="ratingChart"></canvas>
+        </div>
+
+        <!-- 리뷰 상세 -->
+        <div class="reviews-container">
+          <div class="reviews-header">
+            <h3>리뷰 상세</h3>
+          </div>
+          <div class="review-list-header">
+            <div class="review-main">
+              <div>날짜</div>
+              <div>주문자</div>
+              <div>별점</div>
+              <div>리뷰 내용</div>
+            </div>
+          </div>
+          <div id="reviewsBody"><!-- 리뷰 목록 --></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // 모바일 메뉴 토글
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileMenu = document.getElementById('mobileMenu');
+        
+        if (mobileMenuBtn && mobileMenu) {
+            mobileMenuBtn.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+        }
+    
+        // 로그아웃 처리
+        const handleLogout = async () => {
+            try {
+                const authService = await import('./js/authService.js').then(m => m.authService);
+                await authService.logout();
+                window.location.href = '/login.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+                alert('로그아웃 처리 중 오류가 발생했습니다.');
+            }
+        };
+    
+        // 로그아웃 버튼 이벤트 리스너
+        const logoutBtn = document.getElementById('logoutBtn');
+        const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+    
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', handleLogout);
+        }
+        if (mobileLogoutBtn) {
+            mobileLogoutBtn.addEventListener('click', handleLogout);
+        }
+    });
+    </script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const refreshButton = document.getElementById('refreshButton');
+        if (refreshButton) {
+          refreshButton.addEventListener('click', () => {
+            // 데이터 새로고침 로직
+            if (window.dashboardManager && typeof window.dashboardManager.resetAndLoadData === 'function') {
+              window.dashboardManager.resetAndLoadData();
+            } else {
+              // 전역 객체가 없는 경우 페이지 새로고침
+              window.location.reload();
+            }
+          });
+        }
+      });
+      </script>
+<script type="module" src="js/config.js"></script>
+<script type="module" src="js/authService.js"></script>
+<script type="module" src="js/chartManager.js"></script>
+<script type="module" src="js/dashboard.js"></script>
+</body>
+</html>

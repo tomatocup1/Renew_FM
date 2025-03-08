@@ -1,0 +1,12 @@
+# Node.js 라이브러리 폴더
+node_modules/
+
+# 환경 변수 파일
+.env
+
+# 로그 파일들
+*.log
+
+# 운영체제 생성 파일
+.DS_Store
+Thumbs.db

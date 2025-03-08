@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>회원가입</title>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --error-color: #f44336;
+            --border-color: #ddd;
+            --text-color: #333;
+            --background-color: #f5f5f5;
+            --success-color: #4caf50;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, system-ui, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .signup-container {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 480px;
+        }
+
+        .signup-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .signup-header h1 {
+            font-size: 1.8rem;
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .signup-header p {
+            color: #666;
+            font-size: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: #555;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            border: 1.5px solid var(--border-color);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+        }
+
+        .role-select {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .role-option {
+            padding: 0.75rem;
+            text-align: center;
+            border: 1.5px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .role-option:hover {
+            border-color: var(--primary-color);
+            background-color: rgba(76, 175, 80, 0.05);
+        }
+
+        .role-option.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .password-requirements {
+            margin-top: 0.5rem;
+            padding: 0.75rem;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+
+        .requirement {
+            color: #666;
+            display: flex;
+            align-items: center;
+            margin: 0.25rem 0;
+            transition: color 0.2s ease;
+        }
+
+        .requirement::before {
+            content: "●";
+            font-size: 0.5rem;
+            margin-right: 0.5rem;
+            color: #ccc;
+        }
+
+        .requirement.valid {
+            color: var(--success-color);
+        }
+
+        .requirement.valid::before {
+            content: "✓";
+            color: var(--success-color);
+        }
+
+        .error-message {
+            display: none;
+            color: var(--error-color);
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.875rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #43a047;
+        }
+
+        .btn-primary:active {
+            transform: translateY(1px);
+        }
+
+        .signup-footer {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .btn-link {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .btn-link:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 480px) {
+            .signup-container {
+                padding: 1.5rem;
+            }
+
+            .role-select {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="signup-container">
+        <div class="signup-header">
+            <h1>회원가입</h1>
+            <p>리뷰 대시보드 관리자 시스템</p>
+        </div>
+        
+        <form id="signupForm">
+            <div class="form-group">
+                <label for="email">이메일</label>
+                <input type="email" id="email" class="form-control" required 
+                       placeholder="example@example.com">
+                <div class="error-message" id="emailError"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="password">비밀번호</label>
+                <input type="password" id="password" class="form-control" required>
+                <div class="password-requirements">
+                    <div class="requirement" id="lengthReq">8자 이상</div>
+                    <div class="requirement" id="upperReq">대문자 포함</div>
+                    <div class="requirement" id="lowerReq">소문자 포함</div>
+                    <div class="requirement" id="numberReq">숫자 포함</div>
+                    <div class="requirement" id="specialReq">특수문자 포함</div>
+                </div>
+                <div class="error-message" id="passwordError"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="confirmPassword">비밀번호 확인</label>
+                <input type="password" id="confirmPassword" class="form-control" required>
+                <div class="error-message" id="confirmPasswordError"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="name">이름</label>
+                <input type="text" id="name" class="form-control" required 
+                       placeholder="이름을 입력하세요">
+                <div class="error-message" id="nameError"></div>
+            </div>
+
+            <div class="form-group">
+                <label>권한</label>
+                <div class="role-select">
+                    <div class="role-option" data-role="점주">점주</div>
+                    <div class="role-option" data-role="영업자">영업자</div>
+                    <div class="role-option" data-role="프차관리자">프차관리자</div>
+                </div>
+                <div class="error-message" id="roleError"></div>
+            </div>
+
+            <div class="form-group" id="storeCodeGroup" style="display: none;">
+                <label for="storeCode">매장 코드</label>
+                <input type="text" id="storeCode" class="form-control" 
+                       placeholder="매장 코드를 입력하세요">
+                <div class="error-message" id="storeCodeError"></div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">회원가입</button>
+
+            <div class="signup-footer">
+                <a href="/login.html" class="btn-link">이미 계정이 있으신가요? 로그인하기</a>
+            </div>
+        </form>
+    </div>
+
+    `<script type="module">
+        import { authService } from './js/authService.js';
+    
+        class SignupValidator {
+            constructor() {
+                this.passwordRequirements = {
+                    length: { regex: /.{8,}/, element: document.getElementById('lengthReq') },
+                    upper: { regex: /[A-Z]/, element: document.getElementById('upperReq') },
+                    lower: { regex: /[a-z]/, element: document.getElementById('lowerReq') },
+                    number: { regex: /[0-9]/, element: document.getElementById('numberReq') },
+                    special: { regex: /[!@#$%^&*]/, element: document.getElementById('specialReq') }
+                };
+            }
+    
+            validateEmail(email) {
+                const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                return regex.test(email);
+            }
+    
+            validatePassword(password) {
+                let isValid = true;
+                for (const [key, requirement] of Object.entries(this.passwordRequirements)) {
+                    const valid = requirement.regex.test(password);
+                    requirement.element.classList.toggle('valid', valid);
+                    isValid = isValid && valid;
+                }
+                return isValid;
+            }
+    
+            validateConfirmPassword(password, confirmPassword) {
+                return password === confirmPassword;
+            }
+    
+            validateName(name) {
+                return name.length >= 2;
+            }
+        }
+    
+        class SignupForm {
+            constructor() {
+                this.form = document.getElementById('signupForm');
+                this.validator = new SignupValidator();
+                this.roleOptions = document.querySelectorAll('.role-option');
+                this.selectedRole = null;
+                this.submitButton = this.form.querySelector('button[type="submit"]');
+                
+                this.initializeEventListeners();
+                this.checkAuthState();
+            }
+
+            async checkAuthState() {
+                if (authService.isAuthenticated()) {
+                    window.location.href = './dashboard.html';
+                }
+            }
+
+            initializeEventListeners() {
+                this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+
+                // 비밀번호 유효성 실시간 검사
+                document.getElementById('password').addEventListener('input', (e) => {
+                    const isValid = this.validator.validatePassword(e.target.value);
+                    this.submitButton.disabled = !isValid;
+                });
+
+                // 비밀번호 확인 실시간 검사
+                document.getElementById('confirmPassword').addEventListener('input', (e) => {
+                    const password = document.getElementById('password').value;
+                    const isValid = this.validator.validateConfirmPassword(password, e.target.value);
+                    this.toggleError('confirmPasswordError', isValid, '비밀번호가 일치하지 않습니다.');
+                });
+
+                // 역할 선택 이벤트
+                this.roleOptions.forEach(option => {
+                    option.addEventListener('click', () => this.handleRoleSelection(option));
+                });
+
+                // 이메일 실시간 검사
+                document.getElementById('email').addEventListener('input', (e) => {
+                    const isValid = this.validator.validateEmail(e.target.value);
+                    this.toggleError('emailError', isValid, '유효한 이메일 주소를 입력해주세요.');
+                });
+
+                // 이름 실시간 검사
+                document.getElementById('name').addEventListener('input', (e) => {
+                    const isValid = this.validator.validateName(e.target.value);
+                    this.toggleError('nameError', isValid, '이름은 2자 이상이어야 합니다.');
+                });
+            }
+
+            handleRoleSelection(option) {
+                this.roleOptions.forEach(opt => opt.classList.remove('active'));
+                option.classList.add('active');
+                this.selectedRole = option.dataset.role;
+                
+                const storeCodeGroup = document.getElementById('storeCodeGroup');
+                const storeCodeInfo = document.getElementById('storeCodeInfo');
+                
+                // 점주 선택 시 자동 생성 메시지 표시
+                if (this.selectedRole === '점주') {
+                    storeCodeGroup.style.display = 'none';
+                    if (storeCodeInfo) {
+                        storeCodeInfo.textContent = '매장 코드는 회원가입 후 자동으로 생성됩니다.';
+                        storeCodeInfo.style.display = 'block';
+                    }
+                } else {
+                    storeCodeGroup.style.display = 'none';
+                    if (storeCodeInfo) {
+                        storeCodeInfo.style.display = 'none';
+                    }
+                }
+            }
+
+            toggleError(elementId, isValid, message) {
+                const errorElement = document.getElementById(elementId);
+                if (!errorElement) return;
+                
+                errorElement.textContent = isValid ? '' : message;
+                errorElement.classList.toggle('show', !isValid);
+            }
+
+            validateForm(formData) {
+                let isValid = true;
+                const validations = [
+                    {
+                        field: 'email',
+                        isValid: this.validator.validateEmail(formData.email),
+                        message: '유효한 이메일 주소를 입력해주세요.'
+                    },
+                    {
+                        field: 'password',
+                        isValid: this.validator.validatePassword(formData.password),
+                        message: '비밀번호 요구사항을 모두 충족해주세요.'
+                    },
+                    {
+                        field: 'confirmPassword',
+                        isValid: this.validator.validateConfirmPassword(formData.password, document.getElementById('confirmPassword').value),
+                        message: '비밀번호가 일치하지 않습니다.'
+                    },
+                    {
+                        field: 'name',
+                        isValid: this.validator.validateName(formData.name),
+                        message: '이름은 2자 이상이어야 합니다.'
+                    },
+                    {
+                        field: 'role',
+                        isValid: !!formData.role,
+                        message: '권한을 선택해주세요.'
+                    }
+                ];
+
+                validations.forEach(validation => {
+                    this.toggleError(`${validation.field}Error`, validation.isValid, validation.message);
+                    isValid = isValid && validation.isValid;
+                });
+
+                return isValid;
+            }
+
+            async handleSubmit(e) {
+                e.preventDefault();
+                
+                const formData = {
+                    email: document.getElementById('email').value.trim(),
+                    password: document.getElementById('password').value,
+                    name: document.getElementById('name').value.trim(),
+                    role: this.selectedRole
+                };
+
+                if (!this.validateForm(formData)) return;
+
+                try {
+                    this.setLoadingState(true);
+                    const response = await authService.signup(formData);
+                    
+                    // 점주인 경우 매장 코드 표시
+                    if (response.user.role === '점주' && response.user.store_code) {
+                        alert(`회원가입이 완료되었습니다.\n매장 코드: ${response.user.store_code}\n\n이 매장 코드는 꼭 기억해주세요!`);
+                    } else {
+                        alert('회원가입이 완료되었습니다.');
+                    }
+                    
+                    window.location.href = '/login.html';
+
+                } catch (error) {
+                    console.error('Signup error:', error);
+                    this.showGlobalError(error.message || '회원가입 처리 중 오류가 발생했습니다.');
+                } finally {
+                    this.setLoadingState(false);
+                }
+            }
+
+            setLoadingState(isLoading) {
+                this.submitButton.disabled = isLoading;
+                this.submitButton.textContent = isLoading ? '처리 중...' : '회원가입';
+                this.form.classList.toggle('loading', isLoading);
+            }
+
+            showGlobalError(message) {
+                const existingError = this.form.querySelector('.global-error');
+                if (existingError) {
+                    existingError.remove();
+                }
+
+                const errorElement = document.createElement('div');
+                errorElement.className = 'error-message show global-error';
+                errorElement.style.marginTop = '1rem';
+                errorElement.style.textAlign = 'center';
+                errorElement.textContent = message;
+
+                this.form.insertBefore(errorElement, this.form.querySelector('.signup-footer'));
+            }
+        }
+
+        // Initialize form
+        document.addEventListener('DOMContentLoaded', () => {
+            new SignupForm();
+        });
+    </script>`
+</body>
+</html>

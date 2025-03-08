@@ -1,0 +1,19 @@
+[build]
+  # 빌드 명령어(필요시 수정)
+  command = "npm install && npm run build"
+  # 배포할 정적 파일 디렉토리
+  publish = "frontend"
+  # 서버리스 함수 디렉토리
+  functions = "netlify/functions"
+
+# 리다이렉트 설정
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# 모든 경로를 index.html로 리다이렉트 (SPA 지원)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
