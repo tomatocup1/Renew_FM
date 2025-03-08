@@ -1,7 +1,7 @@
 // frontend/js/authService.js
 class AuthService {
     constructor() {
-        this.API_URL = 'http://localhost:3000/api';
+        this.API_URL = '/api';
         this.tokenRefreshTimeouts = new Set();
         this.rateLimitRetryDelay = 1000;
         this.maxRetries = 3;
