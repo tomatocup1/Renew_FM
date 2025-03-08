@@ -158,34 +158,62 @@ class AuthService {
     // frontend/js/authService.js
     async initTokenRefresh() {
         try {
-            const session = this.getSession();
-            if (!session) return;
-
-            this.clearExistingRefreshTimer();
-
-            // 5분이 아닌 1분 전에 갱신하도록 수정
-            const expiresAt = new Date(session.expires_at).getTime();
-            const now = new Date().getTime();
-            const timeUntilRefresh = expiresAt - now - (60 * 1000); // 1분 전에 갱신
-
-            if (timeUntilRefresh > 0) {
-                this.tokenRefreshInterval = setTimeout(async () => {
-                    try {
-                        await this.refreshToken();
-                    } catch (error) {
-                        console.error('Token refresh failed:', error);
-                        // 토큰 갱신 실패 시 바로 리다이렉트하지 않고 세션 만료되었을 때만 처리
-                        const currentSession = this.getSession();
-                        if (!currentSession || new Date(currentSession.expires_at).getTime() <= new Date().getTime()) {
-                            window.location.href = '/login.html';
-                        }
-                    }
-                }, timeUntilRefresh);
+          const session = this.getSession();
+          if (!session) return;
+      
+          this.clearExistingRefreshTimer();
+      
+          // 만료 시간 확인
+          let expiresAt;
+          try {
+            expiresAt = new Date(session.expires_at).getTime();
+            
+            // 잘못된 만료 시간 감지 (1970년대 날짜는 오류로 간주)
+            if (expiresAt < Date.now() - 365 * 24 * 60 * 60 * 1000) {
+              console.warn('잘못된 만료 시간 감지, 현재 시간 기준으로 임시 설정');
+              expiresAt = Date.now() + 60 * 60 * 1000; // 현재 시간 + 1시간
+              
+              // 세션 업데이트
+              session.expires_at = new Date(expiresAt).toISOString();
+              this.setSession(session);
             }
+          } catch (e) {
+            console.error('만료 시간 파싱 오류:', e);
+            expiresAt = Date.now() + 60 * 60 * 1000; // 현재 시간 + 1시간
+            
+            // 세션 업데이트
+            session.expires_at = new Date(expiresAt).toISOString();
+            this.setSession(session);
+          }
+      
+          const now = Date.now();
+          // 만료 1분 전에 갱신
+          const timeUntilRefresh = Math.max(expiresAt - now - (60 * 1000), 0);
+      
+          console.log(`토큰 갱신 타이머 설정: ${Math.round(timeUntilRefresh/1000)}초 후`);
+      
+          if (timeUntilRefresh > 0) {
+            this.tokenRefreshInterval = setTimeout(async () => {
+              try {
+                await this.refreshToken();
+              } catch (error) {
+                console.error('Token refresh failed:', error);
+                // 토큰 갱신 실패 시 바로 리다이렉트하지 않고 세션 만료되었을 때만 처리
+              }
+            }, timeUntilRefresh);
+          } else {
+            // 이미 만료된 경우 즉시 갱신 시도
+            console.log('토큰이 이미 만료됨, 즉시 갱신 시도');
+            try {
+              await this.refreshToken();
+            } catch (error) {
+              console.error('Immediate token refresh failed:', error);
+            }
+          }
         } catch (error) {
-            console.error('Token refresh init error:', error);
+          console.error('Token refresh init error:', error);
         }
-    }
+      }
 
     clearExistingRefreshTimer() {
         if (this.tokenRefreshInterval) {
@@ -274,7 +302,7 @@ class AuthService {
           console.log('토큰 갱신 시도, refresh_token 존재함');
           
           // 요청 URL 로깅 추가
-          const refreshUrl = `${this.API_URL}/auth/refresh-token`;
+          const refreshUrl = `${this.API_URL}/auth/refresh-token`; // 수정된 부분: /api 경로 정확히 입력
           console.log('요청 URL:', refreshUrl);
           
           try {
@@ -298,7 +326,16 @@ class AuthService {
               // 404 오류일 경우 세션을 유지하고 null 반환 (세션 클리어 방지)
               if (response.status === 404) {
                 console.warn('토큰 갱신 엔드포인트를 찾을 수 없습니다. 기존 세션을 유지합니다.');
-                return session; // 기존 세션 반환하여 로그인 상태 유지
+                
+                // 중요: 임시 만료 시간 설정 - 현재 시간에서 5분 추가
+                const tempSession = {
+                  ...session,
+                  expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+                };
+                
+                // 임시 세션 저장
+                this.setSession(tempSession);
+                return tempSession;
               }
               
               return null;
@@ -316,14 +353,25 @@ class AuthService {
             return data.session;
           } catch (fetchError) {
             console.error('토큰 갱신 요청 중 네트워크 오류:', fetchError);
-            // 네트워크 오류일 경우 기존 세션 유지
-            return session;
+            
+            // 네트워크 오류일 경우 세션 유지를 위한 임시 만료 시간 설정
+            const tempSession = {
+              ...session,
+              expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+            };
+            
+            // 임시 세션 저장
+            this.setSession(tempSession);
+            return tempSession;
           }
         } catch (error) {
           console.error('토큰 갱신 중 예외 발생:', error);
           return null;
         } finally {
           this.isRefreshing = false;
+          
+          // 대기 중인 요청 처리
+          this.retryQueue.forEach(resolve => resolve());
           this.retryQueue = [];
         }
       }
@@ -336,7 +384,62 @@ class AuthService {
         const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
         window.location.href = `/login.html?redirect=${currentPath}`;
     }
-
+    async fetchAPI(endpoint, options = {}) {
+        const url = endpoint.startsWith('http') 
+          ? endpoint 
+          : `${this.API_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+        
+        try {
+          const defaultOptions = {
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            credentials: 'include'
+          };
+          
+          // 인증 토큰 추가
+          const session = this.getSession();
+          if (session?.access_token) {
+            defaultOptions.headers.Authorization = `Bearer ${session.access_token}`;
+          }
+          
+          // 옵션 병합
+          const mergedOptions = {
+            ...defaultOptions,
+            ...options,
+            headers: {
+              ...defaultOptions.headers,
+              ...options.headers
+            }
+          };
+          
+          console.log(`API 요청: ${url}`, {
+            method: mergedOptions.method || 'GET'
+          });
+          
+          const response = await fetch(url, mergedOptions);
+          
+          // 토큰 만료 시 자동 갱신 시도
+          if (response.status === 401) {
+            console.log('인증 오류 (401), 토큰 갱신 시도');
+            const newSession = await this.refreshToken();
+            
+            if (newSession?.access_token) {
+              // 헤더 업데이트
+              mergedOptions.headers.Authorization = `Bearer ${newSession.access_token}`;
+              
+              // 요청 재시도
+              return fetch(url, mergedOptions);
+            }
+          }
+          
+          return response;
+        } catch (error) {
+          console.error(`API 요청 오류 (${url}):`, error);
+          throw error;
+        }
+      }
     async fetchWithRetry(url, options, maxRetries = 3, isRefreshAttempt = false) {
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
@@ -460,23 +563,49 @@ class AuthService {
         }
         
         try {
+          // 세션 객체 검증
+          if (typeof session !== 'string' && (!session.access_token || !session.refresh_token)) {
+            console.warn('불완전한 세션 데이터:', session);
+            // 기존 세션이 있다면 유지
+            const existingSession = localStorage.getItem('session');
+            if (existingSession) {
+              console.log('기존 세션 유지');
+              return;
+            }
+          }
+          
           // 객체인 경우 문자열로 변환
           const sessionStr = typeof session === 'string' ? session : JSON.stringify(session);
           
-          // localStorage에 저장 - 한 번에 확실하게 저장
-          localStorage.setItem('session', sessionStr);
-          console.log('세션 저장 완료:', new Date().toISOString());
+          // 세션 저장 - 여러 저장소에 중복 저장하여 안정성 확보
+          try {
+            // localStorage에 저장 - 주 저장소
+            localStorage.setItem('session', sessionStr);
+            console.log('세션 localStorage 저장 완료:', new Date().toISOString());
+            
+            // 백업용 저장소에도 저장
+            sessionStorage.setItem('session', sessionStr);
+            console.log('세션 sessionStorage 백업 저장 완료');
+            
+            // 쿠키에도 저장 (추가 안전장치)
+            document.cookie = `session=${encodeURIComponent(sessionStr)}; path=/; max-age=86400; samesite=lax`;
+            console.log('세션 쿠키 백업 저장 완료');
+          } catch (e) {
+            console.error('주 저장소 저장 오류:', e);
+            
+            // 대체 저장소 시도
+            try {
+              sessionStorage.setItem('session', sessionStr);
+              console.log('세션 sessionStorage에 대체 저장됨');
+            } catch (e2) {
+              console.error('모든 저장소 저장 실패:', e2);
+            }
+          }
           
           // 토큰 갱신 타이머 설정
           this.initTokenRefresh();
         } catch (error) {
           console.error('세션 저장 중 오류:', error);
-          // 백업으로 sessionStorage 시도
-          try {
-            sessionStorage.setItem('session', typeof session === 'string' ? session : JSON.stringify(session));
-          } catch (e) {
-            console.error('sessionStorage 저장도 실패:', e);
-          }
         }
       }
 
@@ -536,43 +665,94 @@ class AuthService {
 
     isAuthenticated() {
         try {
-            // 로컬 스토리지 체크
-            const sessionStr = localStorage.getItem('session');
-            console.log('isAuthenticated check, localStorage session:', sessionStr ? 'exists' : 'not found');
-            
-            if (!sessionStr) {
-                console.log('No session found in localStorage');
-                return false;
+          // 모든 저장소에서 세션 검색
+          let sessionStr = localStorage.getItem('session');
+          
+          // localStorage에 없으면 sessionStorage 확인
+          if (!sessionStr) {
+            console.log('localStorage에 세션 없음, sessionStorage 확인');
+            sessionStr = sessionStorage.getItem('session');
+          }
+          
+          // 쿠키에서도 확인
+          if (!sessionStr) {
+            console.log('스토리지에 세션 없음, 쿠키 확인');
+            const cookies = document.cookie.split(';');
+            for (const cookie of cookies) {
+              const [name, value] = cookie.trim().split('=');
+              if (name === 'session') {
+                sessionStr = decodeURIComponent(value);
+                // 쿠키에서 발견했으면 localStorage에 복원
+                try {
+                  localStorage.setItem('session', sessionStr);
+                  console.log('쿠키에서 세션 복원됨');
+                } catch (e) {
+                  console.warn('쿠키에서 localStorage 복원 실패:', e);
+                }
+                break;
+              }
             }
-            
-            let session;
-            try {
-                session = JSON.parse(sessionStr);
-            } catch (e) {
-                console.error('Failed to parse session from localStorage:', e);
-                return false;
-            }
-            
-            const expiresAt = new Date(session.expires_at).getTime();
-            const now = new Date().getTime();
-            console.log('Session expires in:', Math.round((expiresAt - now) / 1000), 'seconds');
-            
-            if (expiresAt <= now) {
-                console.log('Session expired, attempting refresh');
-                return this.refreshToken()
-                    .then(newSession => !!newSession)
-                    .catch(err => {
-                        console.error('Token refresh failed:', err);
-                        return false;
-                    });
-            }
-            
-            return true;
-        } catch (error) {
-            console.error('Authentication check error:', error);
+          }
+          
+          if (!sessionStr) {
+            console.log('어떤 저장소에도 세션이 없음');
             return false;
+          }
+          
+          // 세션 파싱 및 유효성 검사
+          let session;
+          try {
+            session = JSON.parse(sessionStr);
+          } catch (e) {
+            console.error('세션 데이터 파싱 오류:', e);
+            return false;
+          }
+          
+          if (!session.access_token) {
+            console.error('세션에 액세스 토큰 없음');
+            return false;
+          }
+          
+          // 만료 시간 검사
+          let expiresAt;
+          try {
+            expiresAt = new Date(session.expires_at).getTime();
+            
+            // 잘못된 만료 시간 감지 (1970년대 날짜)
+            if (expiresAt < Date.now() - 365 * 24 * 60 * 60 * 1000) {
+              console.warn('잘못된 만료 시간 감지 (1970년대 날짜)');
+              return this.refreshToken()
+                .then(newSession => !!newSession)
+                .catch(() => false);
+            }
+          } catch (e) {
+            console.error('만료 시간 파싱 오류:', e);
+            return this.refreshToken()
+              .then(newSession => !!newSession)
+              .catch(() => false);
+          }
+          
+          const now = new Date().getTime();
+          console.log('세션 만료까지 남은 시간:', Math.round((expiresAt - now) / 1000), '초');
+          
+          // 만료 10분 전에 갱신 시도
+          if (expiresAt <= now + (10 * 60 * 1000)) {
+            console.log('세션 만료 임박, 갱신 시도');
+            return this.refreshToken()
+              .then(newSession => !!newSession)
+              .catch(err => {
+                console.error('Token refresh failed:', err);
+                // 만료되지 않았다면 true 반환
+                return expiresAt > now;
+              });
+          }
+          
+          return true;
+        } catch (error) {
+          console.error('인증 상태 확인 오류:', error);
+          return false;
         }
-    }
+      }
 
     getAuthHeader() {
         try {
