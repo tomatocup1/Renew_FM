@@ -31,6 +31,18 @@
   status = 200
   force = true
 
+  [[redirects]]
+  from = "/api/auth/signin"
+  to = "/.netlify/functions/signin"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/.netlify/functions/api/auth/signin"
+  to = "/.netlify/functions/signin"
+  status = 200
+  force = true
+
 # 모든 경로를 index.html로 리다이렉트 (SPA 지원)
 [[redirects]]
   from = "/*"
