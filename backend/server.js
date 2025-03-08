@@ -23,22 +23,34 @@ requiredEnvVars.forEach(varName => {
 
 // CORS 설정을 업데이트하여 Netlify 환경 지원
 const corsOptions = {
-    origin: process.env.NODE_ENV === 'production' 
-        ? [process.env.FRONTEND_URL || 'https://your-netlify-app.netlify.app']
-        : 'http://localhost:3000',
+    origin: function(origin, callback) {
+      // 허용할 도메인 목록
+      const allowedOrigins = [
+        'http://localhost:3000',
+        'https://wealthfm.co.kr',
+        'https://www.wealthfm.co.kr'
+      ];
+      
+      // 개발 환경이거나 허용된 도메인이면 허용
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        console.warn('CORS 거부됨:', origin);
+        callback(new Error('CORS 정책에 의해 금지됨'));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
-        'Content-Type', 
-        'Authorization', 
-        'X-Requested-With',
-        'Accept'
-    ]
-};
-
-// CORS 미들웨어 적용
-app.use(cors(corsOptions));
-
+      'Content-Type', 
+      'Authorization', 
+      'X-Requested-With',
+      'Accept'
+    ],
+    exposedHeaders: ['X-Session-Save'] // 클라이언트가 접근할 수 있는 커스텀 헤더
+  };
+  
+  app.use(cors(corsOptions));
 // 기본 보안 설정
 app.use(helmet({
     contentSecurityPolicy: false,

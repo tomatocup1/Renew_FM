@@ -289,6 +289,8 @@
             async handleSubmit(e) {
                 e.preventDefault();
                 this.clearErrors();
+                
+                console.log('로그인 시작');
 
                 const email = document.getElementById('email').value;
                 const password = document.getElementById('password').value;
@@ -308,27 +310,46 @@
                     // 기존 세션 정보 초기화
                     localStorage.removeItem('session');
                     localStorage.removeItem('user');
+                    sessionStorage.removeItem('session');
                     console.log('세션 정보 초기화 완료');
+                    
+                    // 로그인 요청 전에 세션/쿠키 상태 확인
+                    console.log('로그인 전 상태:', {
+                    localStorage: localStorage.getItem('session') ? '있음' : '없음',
+                    sessionStorage: sessionStorage.getItem('session') ? '있음' : '없음',
+                    cookie: document.cookie.includes('session=') ? '있음' : '없음'
+                    });
                     
                     // 로그인 시도
                     const loginResult = await authService.login(email, password);
                     console.log('로그인 응답:', loginResult);
                     
+                    // 세션 데이터 확인
                     if (!loginResult.session) {
                     throw new Error('로그인 응답에 세션 정보가 없습니다');
                     }
                     
-                    // 직접 세션 저장 (authService.setSession이 실패할 경우를 대비)
-                    localStorage.setItem('session', JSON.stringify(loginResult.session));
-                    console.log('세션 수동 저장 완료');
+                    // 직접 로컬 스토리지에 세션 저장 (authService의 setSession이 실패할 경우를 대비)
+                    try {
+                    const sessionStr = JSON.stringify(loginResult.session);
+                    localStorage.setItem('session', sessionStr);
+                    console.log('세션 수동 저장(localStorage) 완료');
                     
+                    // 백업으로 sessionStorage에도 저장
+                    sessionStorage.setItem('session', sessionStr);
+                    console.log('세션 수동 저장(sessionStorage) 완료');
+                    } catch (storageError) {
+                    console.error('스토리지 저장 오류:', storageError);
+                    }
+                    
+                    // 사용자 정보도 저장
                     if (loginResult.user) {
                     localStorage.setItem('user', JSON.stringify(loginResult.user));
                     console.log('사용자 정보 저장 완료');
                     }
                     
                     // 세션 저장 확인
-                    const savedSession = localStorage.getItem('session');
+                    const savedSession = localStorage.getItem('session') || sessionStorage.getItem('session');
                     console.log('세션 저장 확인:', savedSession ? '성공' : '실패');
                     
                     if (!savedSession) {
@@ -336,11 +357,16 @@
                     return;
                     }
                     
-                    // 리다이렉트 전 딜레이 추가 (세션 저장 시간 확보)
+                    // 스토리지에 데이터 저장 후 짧은 지연 시간 추가
                     console.log('로그인 성공, 잠시 후 대시보드로 이동합니다...');
                     setTimeout(() => {
-                    console.log('대시보드로 이동 중...');
-                    window.location.href = './dashboard.html';
+                    // 이동 직전 세션 상태 확인
+                    const finalCheck = localStorage.getItem('session') || sessionStorage.getItem('session');
+                    console.log('이동 직전 세션 확인:', finalCheck ? '있음' : '없음');
+                    
+                    // 쿼리 파라미터에 타임스탬프 추가 (캐시 방지)
+                    const timestamp = new Date().getTime();
+                    window.location.href = `./dashboard.html?t=${timestamp}`;
                     }, 1000);
                 } catch (error) {
                     console.error('로그인 오류:', error);
@@ -351,7 +377,7 @@
                     submitButton.textContent = '로그인';
                 }
                 }
-        }
+            }
         // 페이지 로드 시 LoginManager 초기화
         document.addEventListener('DOMContentLoaded', () => {
             new LoginManager();
@@ -399,87 +425,93 @@
             console.log(message);
         }
         </script>
-        <script>
-            // 세션 디버깅 UI
-            document.addEventListener('DOMContentLoaded', () => {
-              setTimeout(() => {
-                // 디버그 UI 컨테이너
-                const debugContainer = document.createElement('div');
-                debugContainer.id = 'session-debug';
-                debugContainer.style.cssText = `
-                  position: fixed;
-                  bottom: 10px;
-                  left: 10px;
-                  background: rgba(0,0,0,0.7);
-                  color: white;
-                  padding: 10px;
-                  border-radius: 5px;
-                  font-family: monospace;
-                  font-size: 12px;
-                  z-index: 10000;
-                  max-width: 300px;
-                  max-height: 200px;
-                  overflow: auto;
-                `;
-                
-                // 세션 정보 수집
-                const localSession = localStorage.getItem('session');
-                const sessionStorageSession = sessionStorage.getItem('session');
-                
-                // 쿠키에서 세션 검색
-                function getCookie(name) {
-                  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-                  return match ? match[2] : null;
-                }
-                const cookieSession = getCookie('session');
-                
-                // 디버그 정보 구성
-                let debugContent = '<h3 style="margin:0 0 5px 0;font-size:14px;">세션 디버그</h3>';
-                debugContent += '<div style="margin-bottom:5px;">localStorage: ' + (localSession ? '있음' : '없음') + '</div>';
-                debugContent += '<div style="margin-bottom:5px;">sessionStorage: ' + (sessionStorageSession ? '있음' : '없음') + '</div>';
-                debugContent += '<div style="margin-bottom:5px;">cookie: ' + (cookieSession ? '있음' : '없음') + '</div>';
-                
-                // 세션이 있으면 추가 정보 표시
-                if (localSession) {
-                  try {
-                    const session = JSON.parse(localSession);
-                    const expires = new Date(session.expires_at);
-                    const now = new Date();
-                    const timeLeft = Math.round((expires - now) / 1000);
-                    
-                    debugContent += '<div style="margin-top:5px;border-top:1px solid #555;padding-top:5px;">';
-                    debugContent += `만료: ${timeLeft > 0 ? `${timeLeft}초 남음` : '만료됨'}<br>`;
-                    debugContent += `토큰: ${session.access_token ? session.access_token.substring(0, 10) + '...' : '없음'}`;
-                    debugContent += '</div>';
-                  } catch (e) {
-                    debugContent += '<div style="color:red;">파싱 오류: ' + e.message + '</div>';
-                  }
-                }
-                
-                // 액션 버튼
-                debugContent += '<div style="margin-top:10px;">';
-                debugContent += '<button id="debug-refresh" style="margin-right:5px;padding:3px;">새로고침</button>';
-                debugContent += '<button id="debug-clear" style="padding:3px;">세션 삭제</button>';
-                debugContent += '</div>';
-                
-                debugContainer.innerHTML = debugContent;
-                document.body.appendChild(debugContainer);
-                
-                // 버튼 이벤트 연결
-                document.getElementById('debug-refresh').addEventListener('click', () => {
-                  window.location.reload();
-                });
-                
-                document.getElementById('debug-clear').addEventListener('click', () => {
-                  localStorage.removeItem('session');
-                  localStorage.removeItem('user');
-                  sessionStorage.removeItem('session');
-                  document.cookie = 'session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                  alert('세션이 삭제되었습니다. 페이지를 새로고침합니다.');
-                  window.location.reload();
-                });
-              }, 1000);
-            });
-            </script>
+<script>
+    // 세션 디버깅 도구
+    (function() {
+      // 1초 후 실행 (페이지 로드 완료 후)
+      setTimeout(() => {
+        // 디버그 UI 컨테이너
+        const debugContainer = document.createElement('div');
+        debugContainer.id = 'session-debug';
+        debugContainer.style.cssText = `
+          position: fixed;
+          bottom: 10px;
+          left: 10px;
+          background: rgba(0,0,0,0.8);
+          color: white;
+          padding: 10px;
+          border-radius: 5px;
+          font-family: monospace;
+          font-size: 12px;
+          z-index: 10000;
+          max-width: 300px;
+          max-height: 200px;
+          overflow: auto;
+        `;
+        
+        // 세션 정보 수집
+        const localSession = localStorage.getItem('session');
+        const sessionStorageSession = sessionStorage.getItem('session');
+        
+        // 쿠키에서 세션 검색
+        function getCookieValue(name) {
+          const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+          return match ? decodeURIComponent(match[2]) : null;
+        }
+        const cookieSession = getCookieValue('session');
+        
+        // 디버그 정보 구성
+        let content = '<h3 style="margin:0 0 5px 0;font-size:14px;">세션 디버그</h3>';
+        content += `<div style="margin-bottom:5px;">localStorage: ${localSession ? '있음' : '없음'}</div>`;
+        content += `<div style="margin-bottom:5px;">sessionStorage: ${sessionStorageSession ? '있음' : '없음'}</div>`;
+        content += `<div style="margin-bottom:5px;">cookie: ${cookieSession ? '있음' : '없음'}</div>`;
+        
+        // 세션 정보 디버깅
+        if (localSession) {
+          try {
+            const session = JSON.parse(localSession);
+            if (session.expires_at) {
+              const expires = new Date(session.expires_at);
+              const now = new Date();
+              const timeLeft = Math.round((expires - now) / 1000);
+              
+              content += '<div style="margin-top:5px;border-top:1px solid #555;padding-top:5px;">';
+              content += `만료: ${timeLeft > 0 ? `${timeLeft}초 남음` : '만료됨'}<br>`;
+              if (session.access_token) {
+                content += `토큰: ${session.access_token.substring(0, 10)}...<br>`;
+              }
+              content += '</div>';
+            }
+          } catch (e) {
+            content += `<div style="color:#ff6b6b;">파싱 오류: ${e.message}</div>`;
+          }
+        }
+        
+        // 디버그 버튼
+        content += '<div style="margin-top:10px;">';
+        content += '<button id="refresh-btn" style="margin-right:5px;padding:3px 8px;background:#4CAF50;border:none;color:white;border-radius:3px;cursor:pointer;">새로고침</button>';
+        content += '<button id="clear-btn" style="padding:3px 8px;background:#f44336;border:none;color:white;border-radius:3px;cursor:pointer;">세션 삭제</button>';
+        content += '</div>';
+        
+        // 컨테이너에 내용 삽입
+        debugContainer.innerHTML = content;
+        document.body.appendChild(debugContainer);
+        
+        // 버튼 이벤트 처리
+        document.getElementById('refresh-btn').addEventListener('click', () => {
+          window.location.reload();
+        });
+        
+        document.getElementById('clear-btn').addEventListener('click', () => {
+          localStorage.removeItem('session');
+          localStorage.removeItem('user');
+          sessionStorage.removeItem('session');
+          document.cookie = 'session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+          alert('세션이 모두 삭제되었습니다. 페이지를 새로고침합니다.');
+          window.location.reload();
+        });
+      }, 1000);
+    })();
+    </script>
 </body>
 </html>

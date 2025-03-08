@@ -439,93 +439,104 @@ class AuthService {
 
     setSession(session) {
         if (!session) {
-            if (typeof showDebugMessage === 'function') {
-                showDebugMessage('⚠️ setSession: 세션 데이터 없음');
-            }
-            return;
+          console.error('세션 데이터가 없습니다');
+          return;
         }
         
         try {
-            if (typeof showDebugMessage === 'function') {
-                showDebugMessage('세션 저장 시작');
+          console.log('세션 저장 시작');
+          
+          // 객체인 경우 문자열로 변환
+          let sessionStr = session;
+          if (typeof session !== 'string') {
+            sessionStr = JSON.stringify(session);
+          }
+          
+          // localStorage에 저장 시도
+          try {
+            localStorage.setItem('session', sessionStr);
+            console.log('localStorage에 세션 저장 성공');
+          } catch (localStorageError) {
+            console.error('localStorage 저장 실패:', localStorageError);
+          }
+          
+          // sessionStorage에도 저장 (백업)
+          try {
+            sessionStorage.setItem('session', sessionStr);
+            console.log('sessionStorage에 세션 저장 성공');
+          } catch (sessionStorageError) {
+            console.error('sessionStorage 저장 실패:', sessionStorageError);
+          }
+          
+          // 쿠키에 저장 시도 (SameSite 설정 중요)
+          try {
+            const cookieOptions = [
+              'path=/',
+              `max-age=${24 * 60 * 60}`,
+              'samesite=lax' // SameSite 설정 (Lax가 가장 안전하고 호환성 높음)
+            ];
+            
+            // HTTPS인 경우 secure 플래그 추가
+            if (window.location.protocol === 'https:') {
+              cookieOptions.push('secure');
             }
             
-            // 세션 데이터 문자열화
-            let sessionData;
-            if (typeof session === 'string') {
-                sessionData = session;
-            } else {
-                sessionData = JSON.stringify(session);
-            }
-            
-            // 로컬 스토리지에 저장
-            try {
-                localStorage.setItem('session', sessionData);
-                if (typeof showDebugMessage === 'function') {
-                    showDebugMessage('✅ 로컬 스토리지 저장 성공');
-                }
-            } catch (storageError) {
-                if (typeof showDebugMessage === 'function') {
-                    showDebugMessage(`❌ 로컬 스토리지 저장 실패: ${storageError.message}`);
-                }
-            }
-            
-            // 쿠키 설정
-            try {
-                const cookieOptions = [
-                    'path=/',
-                    `max-age=${24 * 60 * 60}`,
-                    'samesite=lax'
-                ];
-                
-                if (window.location.protocol === 'https:') {
-                    cookieOptions.push('secure');
-                }
-                
-                document.cookie = `session=${encodeURIComponent(sessionData)}; ${cookieOptions.join('; ')}`;
-                if (typeof showDebugMessage === 'function') {
-                    showDebugMessage('✅ 쿠키 설정 성공');
-                }
-            } catch (cookieError) {
-                if (typeof showDebugMessage === 'function') {
-                    showDebugMessage(`❌ 쿠키 설정 실패: ${cookieError.message}`);
-                }
-            }
-            
-            this.initTokenRefresh();
+            const cookieStr = `session=${encodeURIComponent(sessionStr)}; ${cookieOptions.join('; ')}`;
+            document.cookie = cookieStr;
+            console.log('쿠키에 세션 저장 성공');
+          } catch (cookieError) {
+            console.error('쿠키 저장 실패:', cookieError);
+          }
+          
+          // 토큰 갱신 타이머 설정
+          this.initTokenRefresh();
+          console.log('토큰 갱신 타이머 설정 완료');
         } catch (error) {
-            if (typeof showDebugMessage === 'function') {
-                showDebugMessage(`❌ 세션 저장 오류: ${error.message}`);
-            }
-            console.error('Error setting session:', error);
+          console.error('세션 저장 중 예외 발생:', error);
         }
-    }
+      }
 
-    getSession() {
+      getSession() {
         try {
-            // 먼저 로컬 스토리지에서 시도
-            const session = localStorage.getItem('session');
-            
-            // 백업 확인
-            if (!session && localStorage.getItem('session_backup')) {
-                console.log('Main session missing, using backup');
-                return JSON.parse(localStorage.getItem('session_backup'));
+          // 먼저 localStorage에서 확인
+          let sessionStr = localStorage.getItem('session');
+          
+          // localStorage에 없으면 sessionStorage 확인
+          if (!sessionStr) {
+            console.log('localStorage에 세션 없음, sessionStorage 확인');
+            sessionStr = sessionStorage.getItem('session');
+          }
+          
+          // 쿠키에서도 확인 (마지막 수단)
+          if (!sessionStr) {
+            console.log('스토리지에 세션 없음, 쿠키 확인');
+            const cookies = document.cookie.split(';');
+            for (const cookie of cookies) {
+              const [name, value] = cookie.trim().split('=');
+              if (name === 'session') {
+                sessionStr = decodeURIComponent(value);
+                break;
+              }
             }
-            
-            return session ? JSON.parse(session) : null;
-        } catch (error) {
-            console.error('Error getting session:', error);
-            
-            // 오류 발생 시 로컬 스토리지 초기화
-            try {
-                localStorage.removeItem('session');
-            } catch (e) {
-                console.error('Failed to clear session:', e);
-            }
-            
+          }
+          
+          if (!sessionStr) {
+            console.log('어떤 저장소에도 세션이 없음');
             return null;
+          }
+          
+          // 문자열을 객체로 파싱
+          try {
+            return JSON.parse(sessionStr);
+          } catch (parseError) {
+            console.error('세션 데이터 파싱 오류:', parseError);
+            return null;
+          }
+        } catch (error) {
+          console.error('getSession 오류:', error);
+          return null;
         }
-    }
+      }
 
     clearSession() {
         try {

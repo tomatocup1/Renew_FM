@@ -23,6 +23,14 @@ export const utils = {
     }
 };
 
+function safeLog(message) {
+    console.log(message);
+    // 함수가 존재하는 경우에만 호출
+    if (typeof window.showDebugMessage === 'function') {
+      window.showDebugMessage(message);
+    }
+  }
+
 function safeDebugMessage(message) {
     console.log(message); // 항상 콘솔에는 로그 출력
     
@@ -128,63 +136,85 @@ applyCalendarStyles() {
 
     async init() {
         try {
-            showDebugMessage("대시보드 초기화 시작");
+          console.log('대시보드 초기화 시작');
+          
+          // 세션 확인
+          const sessionStr = localStorage.getItem('session') || sessionStorage.getItem('session');
+          console.log('세션 데이터:', sessionStr ? '존재함' : '없음');
+          
+          if (!sessionStr) {
+            console.log('세션 없음, 로그인 페이지로 이동');
+            window.location.href = '/login.html';
+            return;
+          }
+          
+          // 세션 파싱 및 검증
+          try {
+            const session = JSON.parse(sessionStr);
+            const expiresAt = new Date(session.expires_at).getTime();
+            const now = new Date().getTime();
             
-            // 로컬 스토리지의 세션 정보 확인
-            const sessionData = localStorage.getItem('session');
-            showDebugMessage(`세션 데이터: ${sessionData ? '존재함' : '없음'}`);
+            console.log('토큰 만료 시각:', new Date(expiresAt).toLocaleString());
+            console.log('현재 시각:', new Date(now).toLocaleString());
+            console.log('만료까지 남은 시간:', Math.round((expiresAt - now) / 1000), '초');
             
-            // 세션 정보 디버깅
-            if (sessionData) {
-                try {
-                    const session = JSON.parse(sessionData);
-                    const expiresAt = new Date(session.expires_at);
-                    const now = new Date();
-                    const timeLeft = Math.floor((expiresAt - now) / 1000);
-                    
-                    showDebugMessage(`토큰 만료까지 ${timeLeft}초 남음`);
-                } catch (e) {
-                    showDebugMessage(`세션 파싱 오류: ${e.message}`);
-                }
-            }
-            
-            const isAuthed = await authService.isAuthenticated();
-            showDebugMessage(`인증 상태: ${isAuthed ? '인증됨' : '인증 안됨'}`);
-            
-            if (!isAuthed) {
-                showDebugMessage("❌ 인증되지 않음, 로그인 페이지로 이동");
+            if (expiresAt <= now) {
+              console.log('토큰 만료됨, 갱신 시도');
+              const refreshed = await authService.refreshToken().catch(() => null);
+              
+              if (!refreshed) {
+                console.log('토큰 갱신 실패, 로그인 페이지로 이동');
                 window.location.href = '/login.html';
                 return;
+              }
+              
+              console.log('토큰 갱신 성공');
             }
-    
-            showDebugMessage("매장 정보 초기화 시작");
-            await this.initializeStoreSelect();
-            
-            showDebugMessage("날짜 선택기 초기화");
-            this.initializeDatePicker();
-            
-            showDebugMessage("통계 카드 초기화");
-            this.initializeStatCards();
-            
-            showDebugMessage("스크롤 이벤트 설정");
-            this.setupScrollListener();
-            
-            showDebugMessage("✅ 대시보드 초기화 완료");
+          } catch (parseError) {
+            console.error('세션 파싱 오류:', parseError);
+            window.location.href = '/login.html';
+            return;
+          }
+          
+          // 인증 확인 (예외 처리 추가)
+          let isAuthed = false;
+          try {
+            isAuthed = await authService.isAuthenticated();
+            console.log('인증 상태:', isAuthed ? '인증됨' : '인증 안됨');
+          } catch (authError) {
+            console.error('인증 확인 중 오류:', authError);
+          }
+          
+          if (!isAuthed) {
+            console.log('인증되지 않음, 로그인 페이지로 이동');
+            window.location.href = '/login.html';
+            return;
+          }
+          
+          console.log('인증 확인 완료, 대시보드 초기화 계속');
+          
+          // 나머지 초기화 로직 실행
+          await this.initializeStoreSelect();
+          this.initializeDatePicker();
+          this.initializeStatCards();
+          this.setupScrollListener();
+          
+          console.log('대시보드 초기화 완료');
         } catch (error) {
-            showDebugMessage(`❌ 초기화 오류: ${error.message}`);
-            console.error('Dashboard initialization error:', error);
-            
-            if (this.initAttempts < this.maxAttempts) {
-                this.initAttempts++;
-                showDebugMessage(`재시도 (${this.initAttempts}/${this.maxAttempts})`);
-                setTimeout(() => this.init(), 1000);
-            } else {
-                showDebugMessage("최대 시도 횟수 초과, 로그인 페이지로 이동");
-                window.location.href = '/login.html';
-            }
+          console.error('대시보드 초기화 오류:', error);
+          
+          // 재시도 로직
+          if (this.initAttempts < this.maxAttempts) {
+            this.initAttempts++;
+            console.log(`초기화 재시도 (${this.initAttempts}/${this.maxAttempts})`);
+            setTimeout(() => this.init(), 1000);
+          } else {
+            console.log('최대 시도 횟수 초과, 로그인 페이지로 이동');
+            window.location.href = '/login.html';
+          }
         }
-    }
-
+      }
+      
     setupScrollListener() {
         const reviewsContainer = document.querySelector('.reviews-container');
         if (!reviewsContainer) return;

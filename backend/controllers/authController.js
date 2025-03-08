@@ -100,142 +100,114 @@ exports.signUp = async (req, res) => {
 
 exports.signIn = async (req, res) => {
     try {
-        const { email, password } = req.body;
-        console.log('로그인 시도:', { email });
-
-        const maxRetries = 3;
-        let lastError = null;
-
-        for (let i = 0; i < maxRetries; i++) {
-            try {
-                // Supabase 인증
-                console.log(`로그인 시도 ${i+1}/${maxRetries}`);
-                const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-                    email,
-                    password
-                });
-
-                if (authError) {
-                    console.error('Supabase 인증 오류:', authError);
-                    if (authError.status === 429) {
-                        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-                        lastError = authError;
-                        continue;
-                    }
-                    throw authError;
-                }
-
-                if (!authData?.user) {
-                    console.error('인증 데이터 없음');
-                    throw new Error('인증 데이터가 없습니다.');
-                }
-
-                console.log('Supabase 인증 성공, 사용자 데이터 조회 시작');
-
-                // 사용자 정보 조회
-                let userData;
-                const { data: existingUser, error: userError } = await supabase
-                    .from('users')
-                    .select('*')
-                    .eq('id', authData.user.id)
-                    .single();
-
-                if (userError) {
-                    console.error('사용자 정보 조회 오류:', userError);
-                    
-                    if (userError.code === 'PGRST116') {
-                        console.log('사용자 정보 없음, 새 사용자 생성 시도');
-                        
-                        // 사용자 메타데이터 정보 정의
-                        const userMetadata = authData.user.user_metadata || {};
-                        
-                        // 새 사용자 생성
-                        const { data: newUser, error: createError } = await supabase
-                            .from('users')
-                            .insert([{
-                                id: authData.user.id,
-                                email: authData.user.email,
-                                name: userMetadata.name || authData.user.email,
-                                role: userMetadata.role || '일반사용자',
-                                store_code: userMetadata.store_code || null,
-                                created_at: new Date().toISOString(),
-                                updated_at: new Date().toISOString()
-                            }])
-                            .select()
-                            .single();
-
-                        if (createError) {
-                            console.error('사용자 생성 오류:', createError);
-                            throw createError;
-                        }
-                        
-                        console.log('새 사용자 생성 성공');
-                        userData = newUser;
-                    } else {
-                        throw userError;
-                    }
-                } else {
-                    console.log('기존 사용자 정보 조회 성공');
-                    userData = existingUser;
-                }
-
-                // 세션 정보 구성
-                const sessionData = {
-                    access_token: authData.session.access_token,
-                    refresh_token: authData.session.refresh_token,
-                    expires_at: authData.session.expires_at
-                };
-
-                console.log('세션 데이터 구성 완료, 클라이언트에 전송 준비');
-
-                // 클라이언트에서의 세션 저장을 위한 명시적 지시
-                res.set('X-Session-Save', 'true');
-                
-                // 쿠키에 세션 정보 저장
-                res.cookie('session', JSON.stringify(sessionData), {
-                    httpOnly: false, // 클라이언트 JS에서 접근 가능하도록
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'lax',
-                    maxAge: 24 * 60 * 60 * 1000 // 24시간
-                });
-
-                console.log('로그인 처리 완료, 응답 전송');
-                
-                return res.json({
-                    message: '로그인 성공',
-                    session: sessionData,
-                    user: userData
-                });
-
-            } catch (error) {
-                console.error(`로그인 시도 ${i+1} 실패:`, error);
-                lastError = error;
-                if (error.status !== 429) break;
-                await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-            }
-        }
-
-        if (lastError) {
-            console.error('최대 재시도 후 로그인 실패:', lastError);
-            return res.status(lastError.status || 401).json({
-                error: '로그인 실패',
-                details: '이메일 또는 비밀번호가 올바르지 않습니다.'
-            });
-        }
-
-        res.status(401).json({
-            error: '로그인 실패',
-            details: '알 수 없는 오류가 발생했습니다.'
+      const { email, password } = req.body;
+      console.log('로그인 시도:', { email });
+  
+      // Supabase 인증
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+  
+      if (authError) {
+        console.error('인증 오류:', authError);
+        return res.status(401).json({
+          error: '로그인 실패',
+          details: '이메일 또는 비밀번호가 올바르지 않습니다.'
         });
-
+      }
+  
+      if (!authData?.user) {
+        console.error('인증 데이터 없음');
+        return res.status(401).json({
+          error: '로그인 실패',
+          details: '인증 데이터가 없습니다.'
+        });
+      }
+  
+      // 사용자 정보 조회
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+  
+      if (userError && userError.code !== 'PGRST116') {
+        console.error('사용자 정보 조회 오류:', userError);
+        return res.status(500).json({
+          error: '사용자 정보 조회 실패',
+          details: userError.message
+        });
+      }
+  
+      // 사용자 정보가 없으면 자동 생성
+      let user = userData;
+      if (!userData) {
+        console.log('사용자 정보 없음, 새 사용자 생성');
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert([{
+            id: authData.user.id,
+            email: authData.user.email,
+            name: authData.user.user_metadata?.name || authData.user.email,
+            role: '일반사용자',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+          .select()
+          .single();
+  
+        if (createError) {
+          console.error('사용자 생성 오류:', createError);
+          return res.status(500).json({
+            error: '사용자 생성 실패',
+            details: createError.message
+          });
+        }
+  
+        user = newUser;
+      }
+  
+      // 세션 정보 구성
+      const sessionData = {
+        access_token: authData.session.access_token,
+        refresh_token: authData.session.refresh_token,
+        expires_at: authData.session.expires_at
+      };
+  
+      // CORS 헤더 설정
+      res.set({
+        'Access-Control-Allow-Origin': req.headers.origin || '*',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Expose-Headers': 'X-Session-Save'
+      });
+      
+      // 클라이언트에서의 세션 저장을 위한 헤더
+      res.set('X-Session-Save', 'true');
+      
+      // HTTP 전용 쿠키 (JavaScript에서 접근 가능)
+      res.cookie('session', JSON.stringify(sessionData), {
+        httpOnly: false, // 클라이언트 JS에서 접근 가능하도록
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000 // 24시간
+      });
+      
+      console.log('로그인 성공, 응답 보냄');
+      
+      return res.json({
+        message: '로그인 성공',
+        session: sessionData,
+        user
+      });
     } catch (err) {
-        console.error('로그인 처리 중 예외 발생:', err);
-        res.status(500).json({
-            error: '서버 오류',
-            details: process.env.NODE_ENV === 'development' ? err.message : undefined
-        });
+      console.error('로그인 처리 중 예외 발생:', err);
+      res.status(500).json({
+        error: '서버 오류',
+        details: process.env.NODE_ENV === 'development' ? err.message : undefined
+      });
     }
-};
+  };
 
 exports.signOut = async (req, res) => {
     try {
