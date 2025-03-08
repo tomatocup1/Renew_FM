@@ -1,5 +1,5 @@
 // backend/controllers/authController.js
-const supabase = require('../supabaseClient');
+const { supabase } = require('../supabaseClient');
 
 exports.signUp = async (req, res) => {
     try {

@@ -87,6 +87,9 @@ apiRoutes.use('/stores', requireAuth, storeAssignmentsRouter);
 // API 라우트를 /api 경로에 마운트
 app.use('/api', apiRoutes);
 
+// server.js
+app.use('/api/auth', authRoutes);
+
 // 정적 파일 제공 설정
 app.use(express.static(path.join(__dirname, '../frontend'), {
     maxAge: '1d',

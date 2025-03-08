@@ -1,5 +1,5 @@
 // backend/middleware/authMiddleware.js
-const supabase = require('../supabaseClient');
+const { supabase } = require('../supabaseClient');
 
 async function extractToken(req) {
     if (req.headers.authorization?.startsWith('Bearer ')) {
@@ -281,7 +281,57 @@ const requireStoreAccess = async (req, res, next) => {
         });
     }
 };
-
+exports.requireAuth = async (req, res, next) => {
+    try {
+      // 헤더에서 토큰 추출
+      const authHeader = req.headers.authorization;
+      
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.warn('인증 토큰이 없거나 유효하지 않은 형식:', authHeader);
+        return res.status(401).json({ error: '인증이 필요합니다.' });
+      }
+      
+      const token = authHeader.split(' ')[1];
+      
+      if (!token) {
+        console.warn('인증 토큰이 비어있음');
+        return res.status(401).json({ error: '유효한 인증 토큰이 필요합니다.' });
+      }
+      
+      // JWT 토큰 검증 (supabase 라이브러리 사용)
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      
+      if (error || !user) {
+        console.warn('토큰 검증 실패:', error);
+        return res.status(401).json({ error: '인증 토큰이 유효하지 않습니다.' });
+      }
+      
+      // 사용자 정보 조회
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      if (userError || !userData) {
+        console.warn('사용자 정보 조회 실패:', userError);
+        return res.status(401).json({ error: '사용자 정보를 찾을 수 없습니다.' });
+      }
+      
+      // 요청 객체에 사용자 정보 설정
+      req.user = userData;
+      
+      // 다음 미들웨어로 진행
+      next();
+    } catch (error) {
+      console.error('인증 미들웨어 오류:', error);
+      res.status(500).json({ error: '인증 처리 중 서버 오류가 발생했습니다.' });
+    }
+  };
+  
+  // authenticate 이름의 함수도 내보내기 (호환성을 위해)
+  exports.authenticate = exports.requireAuth;
+  
 module.exports = {
     requireAuth,
     requireRole,
