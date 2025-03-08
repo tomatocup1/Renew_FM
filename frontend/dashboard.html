@@ -942,6 +942,47 @@
         }
       });
       </script>
+
+// login.html와 dashboard.html에 추가
+function showDebugMessage(message) {
+    // 디버그 메시지 컨테이너가 없으면 생성
+    let debugContainer = document.getElementById('debug-messages');
+    if (!debugContainer) {
+        debugContainer = document.createElement('div');
+        debugContainer.id = 'debug-messages';
+        debugContainer.style.cssText = `
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            width: 300px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 9999;
+            border-radius: 5px;
+        `;
+        document.body.appendChild(debugContainer);
+    }
+    
+    // 메시지 추가
+    const msgElem = document.createElement('div');
+    msgElem.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+    msgElem.style.borderBottom = '1px solid #444';
+    msgElem.style.paddingBottom = '5px';
+    msgElem.style.marginBottom = '5px';
+    
+    debugContainer.appendChild(msgElem);
+    
+    // 스크롤을 가장 아래로
+    debugContainer.scrollTop = debugContainer.scrollHeight;
+    
+    // 로그도 함께 출력
+    console.log(message);
+}
 <script type="module" src="js/config.js"></script>
 <script type="module" src="js/authService.js"></script>
 <script type="module" src="js/chartManager.js"></script>

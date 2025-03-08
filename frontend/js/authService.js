@@ -69,7 +69,9 @@ class AuthService {
     // 기존 로그인 함수
     async login(email, password) {
         try {
-            console.log('Attempting login for:', email);
+            if (typeof showDebugMessage === 'function') {
+                showDebugMessage('로그인 API 호출 시작');
+            }
             
             const response = await this.fetchWithRetry(`${this.API_URL}/auth/signin`, {
                 method: 'POST',
@@ -81,29 +83,50 @@ class AuthService {
                 mode: 'cors',
                 body: JSON.stringify({ email, password })
             });
-
+    
+            if (typeof showDebugMessage === 'function') {
+                showDebugMessage(`API 응답 상태: ${response.status}`);
+            }
+    
             const data = await response.json();
-
+    
             if (!response.ok) {
+                if (typeof showDebugMessage === 'function') {
+                    showDebugMessage(`로그인 실패: ${data.error || '알 수 없는 오류'}`);
+                }
                 throw new Error(data.error || '로그인에 실패했습니다.');
             }
-
+    
             if (!data.session || !data.user) {
+                if (typeof showDebugMessage === 'function') {
+                    showDebugMessage('응답 데이터 형식 오류: 세션 또는 사용자 정보 없음');
+                }
                 throw new Error('Invalid response data');
             }
-
-            console.log('Login successful, setting session and user data');
+    
+            if (typeof showDebugMessage === 'function') {
+                showDebugMessage('로그인 성공, 세션 저장 시도');
+            }
+            
+            // 세션 저장
             this.setSession(data.session);
             this.setUser(data.user);
             
-            await this.initTokenRefresh();
+            // 세션 확인
+            const savedSession = localStorage.getItem('session');
+            if (typeof showDebugMessage === 'function') {
+                showDebugMessage(`세션 저장 결과: ${savedSession ? '성공' : '실패'}`);
+            }
+            
             return data;
         } catch (error) {
+            if (typeof showDebugMessage === 'function') {
+                showDebugMessage(`로그인 처리 오류: ${error.message}`);
+            }
             console.error('Login error:', error);
             throw error;
         }
     }
-
     // frontend/js/authService.js
     async initTokenRefresh() {
         try {
@@ -387,41 +410,91 @@ class AuthService {
     }
 
     setSession(session) {
-        if (!session) return;
+        if (!session) {
+            if (typeof showDebugMessage === 'function') {
+                showDebugMessage('⚠️ setSession: 세션 데이터 없음');
+            }
+            return;
+        }
         
         try {
-            // 로컬 스토리지에 저장
-            const sessionData = JSON.stringify(session);
-            localStorage.setItem('session', sessionData);
-            
-            // 쿠키 설정에 SameSite=Lax 명시
-            const cookieOptions = [
-                'path=/',
-                `max-age=${24 * 60 * 60}`,
-                'samesite=lax'
-            ];
-            
-            // 프로덕션 환경에서는 secure 플래그 추가
-            if (window.location.protocol === 'https:') {
-                cookieOptions.push('secure');
+            if (typeof showDebugMessage === 'function') {
+                showDebugMessage('세션 저장 시작');
             }
             
-            document.cookie = `session=${encodeURIComponent(sessionData)}; ${cookieOptions.join('; ')}`;
+            // 세션 데이터 문자열화
+            let sessionData;
+            if (typeof session === 'string') {
+                sessionData = session;
+            } else {
+                sessionData = JSON.stringify(session);
+            }
             
-            console.log('Session saved successfully:', session);
+            // 로컬 스토리지에 저장
+            try {
+                localStorage.setItem('session', sessionData);
+                if (typeof showDebugMessage === 'function') {
+                    showDebugMessage('✅ 로컬 스토리지 저장 성공');
+                }
+            } catch (storageError) {
+                if (typeof showDebugMessage === 'function') {
+                    showDebugMessage(`❌ 로컬 스토리지 저장 실패: ${storageError.message}`);
+                }
+            }
+            
+            // 쿠키 설정
+            try {
+                const cookieOptions = [
+                    'path=/',
+                    `max-age=${24 * 60 * 60}`,
+                    'samesite=lax'
+                ];
+                
+                if (window.location.protocol === 'https:') {
+                    cookieOptions.push('secure');
+                }
+                
+                document.cookie = `session=${encodeURIComponent(sessionData)}; ${cookieOptions.join('; ')}`;
+                if (typeof showDebugMessage === 'function') {
+                    showDebugMessage('✅ 쿠키 설정 성공');
+                }
+            } catch (cookieError) {
+                if (typeof showDebugMessage === 'function') {
+                    showDebugMessage(`❌ 쿠키 설정 실패: ${cookieError.message}`);
+                }
+            }
+            
             this.initTokenRefresh();
         } catch (error) {
+            if (typeof showDebugMessage === 'function') {
+                showDebugMessage(`❌ 세션 저장 오류: ${error.message}`);
+            }
             console.error('Error setting session:', error);
         }
-    }    
+    }
 
     getSession() {
         try {
+            // 먼저 로컬 스토리지에서 시도
             const session = localStorage.getItem('session');
+            
+            // 백업 확인
+            if (!session && localStorage.getItem('session_backup')) {
+                console.log('Main session missing, using backup');
+                return JSON.parse(localStorage.getItem('session_backup'));
+            }
+            
             return session ? JSON.parse(session) : null;
         } catch (error) {
             console.error('Error getting session:', error);
-            this.clearSession();
+            
+            // 오류 발생 시 로컬 스토리지 초기화
+            try {
+                localStorage.removeItem('session');
+            } catch (e) {
+                console.error('Failed to clear session:', e);
+            }
+            
             return null;
         }
     }

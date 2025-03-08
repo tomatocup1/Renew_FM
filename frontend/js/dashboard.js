@@ -119,38 +119,58 @@ applyCalendarStyles() {
 
     async init() {
         try {
-            console.log('Starting dashboard initialization...');
+            showDebugMessage("대시보드 초기화 시작");
             
             // 로컬 스토리지의 세션 정보 확인
             const sessionData = localStorage.getItem('session');
-            console.log('Session data in localStorage:', sessionData ? '존재함' : '없음');
+            showDebugMessage(`세션 데이터: ${sessionData ? '존재함' : '없음'}`);
             
-            // 쿠키의 세션 정보 확인
-            console.log('Cookies:', document.cookie);
+            // 세션 정보 디버깅
+            if (sessionData) {
+                try {
+                    const session = JSON.parse(sessionData);
+                    const expiresAt = new Date(session.expires_at);
+                    const now = new Date();
+                    const timeLeft = Math.floor((expiresAt - now) / 1000);
+                    
+                    showDebugMessage(`토큰 만료까지 ${timeLeft}초 남음`);
+                } catch (e) {
+                    showDebugMessage(`세션 파싱 오류: ${e.message}`);
+                }
+            }
             
             const isAuthed = await authService.isAuthenticated();
-            console.log('Auth check result:', isAuthed);
+            showDebugMessage(`인증 상태: ${isAuthed ? '인증됨' : '인증 안됨'}`);
             
             if (!isAuthed) {
-                console.log('Not authenticated, redirecting to login...');
-                // 리다이렉트 전 현재 URL 저장
-                const returnUrl = encodeURIComponent(window.location.pathname);
-                window.location.href = `/login.html?redirect=${returnUrl}`;
+                showDebugMessage("❌ 인증되지 않음, 로그인 페이지로 이동");
+                window.location.href = '/login.html';
                 return;
             }
     
+            showDebugMessage("매장 정보 초기화 시작");
             await this.initializeStoreSelect();
+            
+            showDebugMessage("날짜 선택기 초기화");
             this.initializeDatePicker();
+            
+            showDebugMessage("통계 카드 초기화");
             this.initializeStatCards();
+            
+            showDebugMessage("스크롤 이벤트 설정");
             this.setupScrollListener();
-            console.log('Dashboard initialization complete');
+            
+            showDebugMessage("✅ 대시보드 초기화 완료");
         } catch (error) {
+            showDebugMessage(`❌ 초기화 오류: ${error.message}`);
             console.error('Dashboard initialization error:', error);
+            
             if (this.initAttempts < this.maxAttempts) {
                 this.initAttempts++;
-                console.log(`Retrying initialization (attempt ${this.initAttempts})`);
+                showDebugMessage(`재시도 (${this.initAttempts}/${this.maxAttempts})`);
                 setTimeout(() => this.init(), 1000);
             } else {
+                showDebugMessage("최대 시도 횟수 초과, 로그인 페이지로 이동");
                 window.location.href = '/login.html';
             }
         }

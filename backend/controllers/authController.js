@@ -109,12 +109,14 @@ exports.signIn = async (req, res) => {
         for (let i = 0; i < maxRetries; i++) {
             try {
                 // Supabase 인증
+                console.log(`로그인 시도 ${i+1}/${maxRetries}`);
                 const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
                     email,
                     password
                 });
 
                 if (authError) {
+                    console.error('Supabase 인증 오류:', authError);
                     if (authError.status === 429) {
                         await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
                         lastError = authError;
@@ -124,10 +126,13 @@ exports.signIn = async (req, res) => {
                 }
 
                 if (!authData?.user) {
+                    console.error('인증 데이터 없음');
                     throw new Error('인증 데이터가 없습니다.');
                 }
 
-                // 사용자 정보 조회 또는 생성
+                console.log('Supabase 인증 성공, 사용자 데이터 조회 시작');
+
+                // 사용자 정보 조회
                 let userData;
                 const { data: existingUser, error: userError } = await supabase
                     .from('users')
@@ -135,28 +140,42 @@ exports.signIn = async (req, res) => {
                     .eq('id', authData.user.id)
                     .single();
 
-                if (userError?.code === 'PGRST116') {
-                    // 사용자 정보가 없는 경우 생성
-                    const { data: newUser, error: createError } = await supabase
-                    .from('users')
-                    .insert([{
-                        id: user.id,
-                        email: user.email,
-                        name: userMetadata.name || user.email,
-                        role: userMetadata.role || '일반사용자',
-                        store_code: userMetadata.store_code || null,
-                        password: null, // 암호화된 비밀번호는 auth에서 관리
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                    }])
-                    .select()
-                    .single();
+                if (userError) {
+                    console.error('사용자 정보 조회 오류:', userError);
+                    
+                    if (userError.code === 'PGRST116') {
+                        console.log('사용자 정보 없음, 새 사용자 생성 시도');
+                        
+                        // 사용자 메타데이터 정보 정의
+                        const userMetadata = authData.user.user_metadata || {};
+                        
+                        // 새 사용자 생성
+                        const { data: newUser, error: createError } = await supabase
+                            .from('users')
+                            .insert([{
+                                id: authData.user.id,
+                                email: authData.user.email,
+                                name: userMetadata.name || authData.user.email,
+                                role: userMetadata.role || '일반사용자',
+                                store_code: userMetadata.store_code || null,
+                                created_at: new Date().toISOString(),
+                                updated_at: new Date().toISOString()
+                            }])
+                            .select()
+                            .single();
 
-                    if (createError) throw createError;
-                    userData = newUser;
-                } else if (userError) {
-                    throw userError;
+                        if (createError) {
+                            console.error('사용자 생성 오류:', createError);
+                            throw createError;
+                        }
+                        
+                        console.log('새 사용자 생성 성공');
+                        userData = newUser;
+                    } else {
+                        throw userError;
+                    }
                 } else {
+                    console.log('기존 사용자 정보 조회 성공');
                     userData = existingUser;
                 }
 
@@ -164,25 +183,24 @@ exports.signIn = async (req, res) => {
                 const sessionData = {
                     access_token: authData.session.access_token,
                     refresh_token: authData.session.refresh_token,
-                    expires_at: authData.session.expires_at,
-                    user: {
-                        ...userData,
-                        auth: authData.user
-                    }
+                    expires_at: authData.session.expires_at
                 };
 
+                console.log('세션 데이터 구성 완료, 클라이언트에 전송 준비');
+
+                // 클라이언트에서의 세션 저장을 위한 명시적 지시
+                res.set('X-Session-Save', 'true');
+                
                 // 쿠키에 세션 정보 저장
-                res.cookie('session', JSON.stringify({
-                    access_token: sessionData.access_token,
-                    refresh_token: sessionData.refresh_token,
-                    expires_at: sessionData.expires_at
-                }), {
-                    httpOnly: true,
+                res.cookie('session', JSON.stringify(sessionData), {
+                    httpOnly: false, // 클라이언트 JS에서 접근 가능하도록
                     secure: process.env.NODE_ENV === 'production',
                     sameSite: 'lax',
                     maxAge: 24 * 60 * 60 * 1000 // 24시간
                 });
 
+                console.log('로그인 처리 완료, 응답 전송');
+                
                 return res.json({
                     message: '로그인 성공',
                     session: sessionData,
@@ -190,6 +208,7 @@ exports.signIn = async (req, res) => {
                 });
 
             } catch (error) {
+                console.error(`로그인 시도 ${i+1} 실패:`, error);
                 lastError = error;
                 if (error.status !== 429) break;
                 await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
@@ -197,7 +216,7 @@ exports.signIn = async (req, res) => {
         }
 
         if (lastError) {
-            console.error('Login error after retries:', lastError);
+            console.error('최대 재시도 후 로그인 실패:', lastError);
             return res.status(lastError.status || 401).json({
                 error: '로그인 실패',
                 details: '이메일 또는 비밀번호가 올바르지 않습니다.'
@@ -210,7 +229,7 @@ exports.signIn = async (req, res) => {
         });
 
     } catch (err) {
-        console.error('Login error:', err);
+        console.error('로그인 처리 중 예외 발생:', err);
         res.status(500).json({
             error: '서버 오류',
             details: process.env.NODE_ENV === 'development' ? err.message : undefined

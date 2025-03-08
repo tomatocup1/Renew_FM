@@ -286,62 +286,118 @@
                 loginError.classList.add('show');
             }
     
-            // 로그인 처리
-                async handleSubmit(e) {
-                    e.preventDefault();
-                    this.clearErrors();
+            async handleSubmit(e) {
+                e.preventDefault();
+                this.clearErrors();
+                
+                showDebugMessage("로그인 시작");
 
-                    const email = document.getElementById('email').value;
-                    const password = document.getElementById('password').value;
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
 
-                    // 입력값 검증
-                    if (!email || !password) {
-                        this.showError('이메일과 비밀번호를 모두 입력해주세요.');
-                        return;
-                    }
+                if (!email || !password) {
+                    this.showError('이메일과 비밀번호를 모두 입력해주세요.');
+                    showDebugMessage("로그인 실패: 이메일과 비밀번호 필요");
+                    return;
+                }
 
-                    try {
-                        // 로딩 상태 표시
-                        const submitButton = this.form.querySelector('button[type="submit"]');
-                        submitButton.disabled = true;
-                        submitButton.textContent = '로그인 중...';
+                try {
+                    const submitButton = this.form.querySelector('button[type="submit"]');
+                    submitButton.disabled = true;
+                    submitButton.textContent = '로그인 중...';
+                    
+                    showDebugMessage(`로그인 시도: ${email}`);
 
-                        console.log('Attempting login with:', email);
+                    // 로그인 직전 로컬 스토리지와 쿠키 상태 확인
+                    const beforeSessionStr = localStorage.getItem('session');
+                    showDebugMessage(`로그인 전 세션: ${beforeSessionStr ? '존재함' : '없음'}`);
+                    
+                    // 로그인 시도
+                    const loginResult = await authService.login(email, password);
+                    showDebugMessage("API 응답 수신 완료");
+                    
+                    // 로그인 후 로컬 스토리지와 쿠키 상태 확인
+                    const afterSessionStr = localStorage.getItem('session');
+                    showDebugMessage(`로그인 후 세션: ${afterSessionStr ? '존재함' : '없음'}`);
+                    
+                    // 세션이 제대로 저장되었는지 검증
+                    if (!afterSessionStr) {
+                        showDebugMessage("⚠️ 세션이 로컬 스토리지에 저장되지 않음");
                         
-                        // authService를 통한 로그인 시도
-                        const loginResult = await authService.login(email, password);
-                        console.log('Login successful:', loginResult);
-                        
-                        // 세션이 제대로 저장되었는지 확인
-                        const sessionCheck = authService.getSession();
-                        console.log('Session after login:', sessionCheck);
-                        
-                        if (!sessionCheck) {
-                            console.error('로그인은 성공했으나 세션이 저장되지 않았습니다.');
-                            // 세션이 없더라도 진행
+                        // 수동으로 세션 저장 시도
+                        if (loginResult.session) {
+                            localStorage.setItem('session', JSON.stringify(loginResult.session));
+                            showDebugMessage("✅ 세션 수동 저장 완료");
                         }
-                        
-                        // 타임아웃을 통한 대시보드 리다이렉트
-                        console.log('로그인 성공, 대시보드로 리다이렉트합니다...');
-                        setTimeout(() => {
-                            window.location.href = './dashboard.html';
-                        }, 500);
-
-                    } catch (error) {
-                        console.error('Login error:', error);
-                        this.showError(error.message || '로그인에 실패했습니다.');
-                        
-                        // 로딩 상태 복원
-                        const submitButton = this.form.querySelector('button[type="submit"]');
-                        submitButton.disabled = false;
-                        submitButton.textContent = '로그인';
+                    } else {
+                        showDebugMessage("✅ 세션 저장 확인됨");
                     }
+                    
+                    // 지연시간을 늘려서 대시보드 리다이렉션
+                    showDebugMessage("2초 후 대시보드로 이동합니다...");
+                    setTimeout(() => {
+                        showDebugMessage("➡️ 대시보드로 이동 중...");
+                        window.location.href = './dashboard.html';
+                    }, 2000);
+
+                } catch (error) {
+                    showDebugMessage(`❌ 로그인 오류: ${error.message}`);
+                    console.error('Login error:', error);
+                    this.showError(error.message || '로그인에 실패했습니다.');
+
+                } finally {
+                    const submitButton = this.form.querySelector('button[type="submit"]');
+                    submitButton.disabled = false;
+                    submitButton.textContent = '로그인';
                 }
             }
+        }
         // 페이지 로드 시 LoginManager 초기화
         document.addEventListener('DOMContentLoaded', () => {
             new LoginManager();
         });
     </script>
+    <script>
+        // 디버깅 메시지 표시 유틸리티
+        function showDebugMessage(message) {
+            // 디버그 메시지 컨테이너가 없으면 생성
+            let debugContainer = document.getElementById('debug-messages');
+            if (!debugContainer) {
+                debugContainer = document.createElement('div');
+                debugContainer.id = 'debug-messages';
+                debugContainer.style.cssText = `
+                    position: fixed;
+                    bottom: 10px;
+                    right: 10px;
+                    width: 300px;
+                    max-height: 200px;
+                    overflow-y: auto;
+                    background: rgba(0, 0, 0, 0.8);
+                    color: white;
+                    padding: 10px;
+                    font-family: monospace;
+                    font-size: 12px;
+                    z-index: 9999;
+                    border-radius: 5px;
+                `;
+                document.body.appendChild(debugContainer);
+            }
+            
+            // 메시지 추가
+            const msgElem = document.createElement('div');
+            msgElem.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            msgElem.style.borderBottom = '1px solid #444';
+            msgElem.style.paddingBottom = '5px';
+            msgElem.style.marginBottom = '5px';
+            
+            debugContainer.appendChild(msgElem);
+            
+            // 스크롤을 가장 아래로
+            debugContainer.scrollTop = debugContainer.scrollHeight;
+            
+            // 로그도 함께 출력
+            console.log(message);
+        }
+        </script>
 </body>
 </html>
