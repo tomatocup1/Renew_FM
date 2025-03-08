@@ -283,94 +283,98 @@ applyCalendarStyles() {
 
 // dashboard.js 파일 안의 initializeStoreSelect 함수 수정
 
-    async initializeStoreSelect() {
-        try {
-        console.log('매장 정보 초기화 시작...');
+    
+async initializeStoreSelect() {
+    try {
+      console.log('매장 정보 초기화 시작...');
+      
+      const user = await authService.getCurrentUser();
+      if (!user?.id) {
+        console.error('사용자 정보를 가져올 수 없습니다');
+        this.showAlert('사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.', 'error');
+        setTimeout(() => window.location.href = '/login.html', 2000);
+        return;
+      }
+      
+      console.log('사용자 정보:', user);
+      
+      // 절대 경로 사용 (netlify 함수 직접 호출)
+      const baseUrl = window.location.origin;
+      console.log('기본 URL:', baseUrl);
+      
+      try {
+        // 함수 직접 호출
+        const functionUrl = `${baseUrl}/.netlify/functions/stores-user-platform`;
+        console.log('API 요청 URL:', functionUrl);
         
-        const user = await authService.getCurrentUser();
-        if (!user?.id) {
-            console.error('사용자 정보를 가져올 수 없습니다');
-            this.showAlert('사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.', 'error');
-            setTimeout(() => window.location.href = '/login.html', 2000);
-            return;
+        const response = await fetch(functionUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': authService.getAuthHeader(),
+            'Accept': 'application/json'
+          },
+          credentials: 'include'
+        });
+      
+        console.log('API 응답 상태:', response.status);
+        const contentType = response.headers.get('content-type');
+        console.log('응답 콘텐츠 타입:', contentType);
+        
+        if (!response.ok) {
+          console.log('API 요청 실패, 대체 메서드 시도');
+          return await this.loadStoresByDirectMethod(user.id);
         }
         
-        console.log('사용자 정보:', user);
-        
-        // API 호출 방식을 절대 경로로 변경
-        try {
-            // 절대 경로 중심으로 재구성
-            const baseUrl = window.location.origin; // 현재 도메인 (예: https://wealthfm.co.kr)
-            const response = await fetch(`${baseUrl}/.netlify/functions/stores-user-platform`, {
-            method: 'GET',
-            headers: {
-                'Authorization': authService.getAuthHeader(),
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include'
-            });
-        
-            console.log('API 응답 상태:', response.status);
-            
-            if (!response.ok) {
-            // 첫 번째 방법 실패 시 대체 URL 시도
-            console.log('첫 번째 API 요청 실패, 대체 URL 시도');
-            return await this.initializeStoreSelectFallback(user.id);
-            }
-        
-            const stores = await response.json();
-            console.log('매장 데이터:', stores);
-        
-            if (!Array.isArray(stores) || stores.length === 0) {
-            console.warn('매장 정보가 없습니다');
-            this.showAlert('표시할 매장 정보가 없습니다. 관리자에게 매장 할당을 요청하세요.', 'warning');
-            return;
-            }
-        
-            // 중복 제거 및 포맷팅 처리
-            const uniqueStores = {};
-            stores.forEach(store => {
-            const key = `${store.store_code}-${store.platform_code || ''}`;
-            if (!uniqueStores[key]) {
-                uniqueStores[key] = store;
-            }
-            });
-        
-            const formattedStores = Object.values(uniqueStores).map(store => ({
-            value: JSON.stringify({
-                store_code: store.store_code,
-                platform_code: store.platform_code || '',
-                platform: store.platform || '배달의민족'
-            }),
-            label: store.platform_code ? 
-                    `[${store.platform || '배달의민족'}] ${store.store_name} (${store.platform_code})` :
-                    `[배달의민족] ${store.store_name}`,
-            store_code: store.store_code
-            }));
-        
-            console.log('포맷팅된 매장 목록:', formattedStores);
-            this.populateStoreSelectWithAllOption(formattedStores);
-        } catch (apiError) {
-            console.error('API 호출 중 오류:', apiError);
-            // 첫 번째 방법 실패 시 대체 URL 시도
-            return await this.initializeStoreSelectFallback(user.id);
+        // 콘텐츠 타입 확인
+        if (!contentType || !contentType.includes('application/json')) {
+          console.warn('JSON이 아닌 응답:', contentType);
+          const text = await response.text();
+          console.log('비JSON 응답 내용(일부):', text.substring(0, 100));
+          return await this.loadStoresByDirectMethod(user.id);
         }
-        } catch (error) {
-        console.error('매장 목록 초기화 중 오류 발생:', error);
-        this.showAlert('매장 정보를 불러오는데 실패했습니다. 새로고침 후 다시 시도해주세요.', 'error');
         
-        // 폴백 시도
-        try {
-            const user = await authService.getCurrentUser();
-            if (user?.id) {
-            await this.initializeStoreSelectFallback(user.id);
-            }
-        } catch (fallbackError) {
-            console.error('폴백 로드도 실패:', fallbackError);
+        const stores = await response.json();
+        console.log('매장 데이터:', stores);
+      
+        if (!Array.isArray(stores) || stores.length === 0) {
+          console.warn('매장 정보가 없습니다');
+          this.showAlert('표시할 매장 정보가 없습니다. 관리자에게 매장 할당을 요청하세요.', 'warning');
+          return;
         }
-        }
+      
+        // 중복 제거 및 포맷팅 처리
+        const uniqueStores = {};
+        stores.forEach(store => {
+          const key = `${store.store_code}-${store.platform_code || ''}`;
+          if (!uniqueStores[key]) {
+            uniqueStores[key] = store;
+          }
+        });
+      
+        const formattedStores = Object.values(uniqueStores).map(store => ({
+          value: JSON.stringify({
+            store_code: store.store_code,
+            platform_code: store.platform_code || '',
+            platform: store.platform || '배달의민족'
+          }),
+          label: store.platform_code ? 
+                 `[${store.platform || '배달의민족'}] ${store.store_name} (${store.platform_code})` :
+                 `[배달의민족] ${store.store_name}`,
+          store_code: store.store_code
+        }));
+      
+        console.log('포맷팅된 매장 목록:', formattedStores);
+        this.populateStoreSelectWithAllOption(formattedStores);
+      } catch (apiError) {
+        console.error('API 호출 중 오류:', apiError);
+        // 대체 매장 로드 방식 시도
+        return await this.loadStoresByDirectMethod(user.id);
+      }
+    } catch (error) {
+      console.error('매장 목록 초기화 중 오류 발생:', error);
+      this.showAlert('매장 정보를 불러오는데 실패했습니다. 새로고침 후 다시 시도해주세요.', 'error');
     }
+  }
         
     async initializeStoreSelectFallback(userId) {
         console.log('폴백 매장 로드 시도 중... 사용자 ID:', userId);

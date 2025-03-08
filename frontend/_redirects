@@ -1,0 +1,7 @@
+# Netlify redirects 파일
+
+# API 경로를 Netlify Functions로 리다이렉트
+/api/*  /.netlify/functions/:splat  200
+
+# 모든 경로를 index.html로 리다이렉트 (SPA 지원)
+/*      /index.html                 200
