@@ -94,6 +94,27 @@
   status = 200
   force = true
 
+  # 운영자용 모든 매장 조회 라우트 추가
+[[redirects]]
+  from = "/api/stores/all"
+  to = "/.netlify/functions/stores-all"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/stores_all"
+  to = "/.netlify/functions/stores-all"
+  status = 200
+  force = true
+
+# 운영자가 특정 사용자의 매장을 조회하는 라우트
+[[redirects]]
+  from = "/api/admin/users/:userId/stores"
+  to = "/.netlify/functions/admin-user-stores"
+  status = 200
+  query = {userId = ":userId"}
+  force = true
+
 # 최종 폴백 리다이렉트 (SPA 지원)
 [[redirects]]
   from = "/*"
