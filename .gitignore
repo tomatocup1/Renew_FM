@@ -10,3 +10,6 @@ node_modules/
 # 운영체제 생성 파일
 .DS_Store
 Thumbs.db
+
+# Local Netlify folder
+.netlify

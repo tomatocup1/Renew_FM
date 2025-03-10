@@ -1,24 +1,16 @@
 // netlify/functions/stats-details.js
-const { createClient } = require('@supabase/supabase-js');
+const { supabase, corsHeaders } = require('./utils/supabase');
 
 exports.handler = async (event, context) => {
-  // CORS 헤더 설정
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Content-Type': 'application/json'
-  };
-
   // OPTIONS 요청 처리
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers };
+    return { statusCode: 204, headers: corsHeaders };
   }
 
   if (event.httpMethod !== 'GET') {
     return {
       statusCode: 405,
-      headers,
+      headers: corsHeaders,
       body: JSON.stringify({ error: '지원하지 않는 HTTP 메소드입니다.' })
     };
   }
@@ -28,19 +20,13 @@ exports.handler = async (event, context) => {
     const authHeader = event.headers.authorization || '';
     const token = authHeader.replace('Bearer ', '');
     
-    // Supabase 클라이언트 초기화
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_KEY
-    );
-    
     // 사용자 정보 확인
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     
     if (userError || !user) {
       return {
         statusCode: 401,
-        headers,
+        headers: corsHeaders,
         body: JSON.stringify({ error: '인증에 실패했습니다' })
       };
     }
@@ -58,7 +44,7 @@ exports.handler = async (event, context) => {
     if (!store_code) {
       return {
         statusCode: 400,
-        headers,
+        headers: corsHeaders,
         body: JSON.stringify({ error: '매장 코드가 필요합니다.' })
       };
     }
@@ -109,20 +95,18 @@ exports.handler = async (event, context) => {
     
     // 에러 처리
     if (statsResult.error) {
-      console.error('통계 데이터 조회 오류:', statsResult.error);
       return {
         statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: '통계 데이터를 가져올 수 없습니다: ' + statsResult.error.message })
+        headers: corsHeaders,
+        body: JSON.stringify({ error: '통계 데이터 조회 실패: ' + statsResult.error.message })
       };
     }
     
     if (reviewsResult.error) {
-      console.error('리뷰 데이터 조회 오류:', reviewsResult.error);
       return {
         statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: '리뷰 데이터를 가져올 수 없습니다: ' + reviewsResult.error.message })
+        headers: corsHeaders,
+        body: JSON.stringify({ error: '리뷰 데이터 조회 실패: ' + reviewsResult.error.message })
       };
     }
     
@@ -135,7 +119,7 @@ exports.handler = async (event, context) => {
     
     return {
       statusCode: 200,
-      headers,
+      headers: corsHeaders,
       body: JSON.stringify({
         stats,
         reviews,
@@ -151,7 +135,7 @@ exports.handler = async (event, context) => {
     console.error('함수 실행 오류:', error);
     return {
       statusCode: 500,
-      headers,
+      headers: corsHeaders,
       body: JSON.stringify({ 
         error: '서버 오류가 발생했습니다',
         message: error.message 
