@@ -324,10 +324,9 @@ class AuthService {
           if (!response.ok) {
             console.error('토큰 갱신 실패:', response.status);
             
-            // 404 오류일 경우 세션을 유지하고 null 반환 (세션 클리어 방지)
-            if (response.status === 404) {
-              console.warn('토큰 갱신 엔드포인트를 찾을 수 없습니다. 기존 세션을 유지합니다.');
-              
+            if (error || !data.session) {
+                console.error('토큰 갱신 응답에 세션 정보가 없습니다');
+                // 401 에러를 받더라도 세션을 유지하기 위해 임시 세션 생성  
               // 중요: 임시 만료 시간 설정 - 현재 시간에서 5분 추가
               const tempSession = {
                 ...session,

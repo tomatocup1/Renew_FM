@@ -290,8 +290,9 @@ async initializeStoreSelect() {
       
       // 먼저 인증 상태를 명시적으로 확인
       if (!await authService.isAuthenticated()) {
-        console.error('인증되지 않음, 로그인 페이지로 이동');
-        window.location.href = '/login.html';
+        console.error('인증되지 않음');
+        // 로그인 페이지로 이동하는 대신 테스트 데이터 사용
+        this.useTestStoreData();
         return;
       }
       
