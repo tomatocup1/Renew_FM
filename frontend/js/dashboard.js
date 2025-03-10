@@ -291,111 +291,65 @@ async initializeStoreSelect() {
     
     // 먼저 인증 상태를 명시적으로 확인
     if (!await authService.isAuthenticated()) {
-      console.error('인증되지 않음');
-      // 로그인 페이지로 이동하는 대신 테스트 데이터 사용
+      console.log('인증되지 않음, 테스트 데이터 사용');
       this.useTestStoreData();
       return;
     }
     
-    // 현재 사용자 정보 및 권한 확인
+    // 사용자 권한 확인
     const currentUser = await authService.getCurrentUser();
     console.log('현재 사용자 정보:', currentUser);
     
     const isAdmin = currentUser?.role === '운영자';
     console.log('운영자 권한 여부:', isAdmin);
+
+    // 간소화된 API 경로 - 단일 엔드포인트 사용
+    // 수정: 서버 URL 경로에 맞게 API 엔드포인트 수정
+    const apiEndpoint = '/.netlify/functions/stores-user-platform';
     
-    // 운영자인 경우 모든 매장 목록 조회, 그렇지 않은 경우 사용자 매장만 조회
-    const apiEndpoint = isAdmin ? '/api/stores/all' : '/api/stores-user-platform';
-    
-    // 여러 API 경로 시도 (하이픈/언더스코어 표기법 차이, 경로 변형 시도)
-    const apiPaths = [
-      `/api${apiEndpoint.startsWith('/api') ? apiEndpoint.substring(4) : apiEndpoint}`,  // 표준 API 경로
-      apiEndpoint.replace(/-/g, '_'),  // 언더스코어 변형
-      `${CONFIG.API_BASE_URL}${apiEndpoint.startsWith('/api') ? apiEndpoint.substring(4) : apiEndpoint}`,  // 직접 Netlify 함수 경로
-      `${CONFIG.API_BASE_URL}${apiEndpoint.replace(/-/g, '_').substring(4)}`,   // 직접 Netlify 함수 경로 (언더스코어)
-      // 운영자용 대체 엔드포인트
-      isAdmin ? '/api/stores/all' : null,
-      isAdmin ? '/api/stores_all' : null,
-      isAdmin ? `${CONFIG.API_BASE_URL}/stores/all` : null,
-      isAdmin ? `${CONFIG.API_BASE_URL}/stores_all` : null
-    ].filter(Boolean); // null 값 제거
-    
-    let responseData = null;
-    let successPath = '';
-    
-    // 모든 가능한 경로 시도
-    for (const apiPath of apiPaths) {
-      try {
-        console.log(`API 요청 시도: ${apiPath}`);
-        
-        const response = await fetch(apiPath, {
-          method: 'GET',
-          headers: {
-            'Authorization': authService.getAuthHeader(),
-            'Accept': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        console.log(`${apiPath} 응답 상태:`, response.status);
-        
-        // 응답이 JSON인지 확인 (Content-Type 헤더 확인)
-        const contentType = response.headers.get('Content-Type') || '';
-        if (!contentType.includes('application/json')) {
-          console.warn(`${apiPath}에서 JSON이 아닌 응답 수신: ${contentType}`);
-          continue; // JSON이 아니면 다음 경로 시도
-        }
-        
-        if (!response.ok) {
-          console.warn(`${apiPath} 응답 실패:`, response.status);
-          continue; // 실패 시 다음 경로 시도
-        }
-        
-        responseData = await response.json();
-        successPath = apiPath;
-        console.log(`성공한 API 경로: ${apiPath}, 데이터 수:`, Array.isArray(responseData) ? responseData.length : '객체');
-        break;
-      } catch (pathError) {
-        console.warn(`${apiPath} 요청 오류:`, pathError.message);
-      }
-    }
-    
-    // 모든 API 경로 시도 실패 시 대체 방법 시도
-    if (!responseData) {
-      console.log('모든 API 경로 시도 실패, 대체 방법 시도');
+    try {
+      console.log(`API 요청 시작: ${apiEndpoint}`);
       
-      // 운영자인 경우 대체 API 호출
-      if (isAdmin) {
-        try {
-          console.log('운영자용 대체 API 호출 시도');
-          const adminStores = await this.loadStoresByDirectMethod(currentUser.id, true);
-          if (adminStores && adminStores.length > 0) {
-            return; // 성공적으로 매장 목록을 로드한 경우
-          }
-        } catch (adminError) {
-          console.error('운영자용 대체 API 호출 실패:', adminError);
-        }
-      } else {
-        // 일반 사용자인 경우 기존 fallback 메서드 시도
-        try {
-          if (currentUser?.id) {
-            await this.initializeStoreSelectFallback(currentUser.id);
-            return;
-          }
-        } catch (userError) {
-          console.error('사용자 정보 조회 실패:', userError);
-        }
+      const response = await fetch(apiEndpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': authService.getAuthHeader(),
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      console.log(`API 응답 상태:`, response.status);
+      
+      // 응답이 JSON인지 확인
+      const contentType = response.headers.get('Content-Type') || '';
+      if (!contentType.includes('application/json')) {
+        console.warn(`${apiEndpoint}에서 JSON이 아닌 응답 수신: ${contentType}`);
+        throw new Error('API 응답이 JSON 형식이 아닙니다');
       }
       
-      // 모든 시도 실패 시 테스트 데이터 사용
+      if (!response.ok) {
+        throw new Error(`API 요청 실패: ${response.status}`);
+      }
+      
+      const responseData = await response.json();
+      
+      if (!Array.isArray(responseData)) {
+        console.warn('API 응답이 배열이 아님:', typeof responseData);
+        throw new Error('응답 데이터 형식이 올바르지 않습니다');
+      }
+      
+      // 데이터 포맷팅 및 표시
+      const formattedStores = this.formatStoreData(responseData);
+      console.log('포맷팅된 매장 목록:', formattedStores);
+      this.populateStoreSelectWithAllOption(formattedStores);
+      
+    } catch (error) {
+      console.error('API 요청 중 오류 발생:', error.message);
+      console.log('테스트 데이터로 대체');
       this.useTestStoreData(isAdmin);
-      return;
     }
-    
-    // 데이터 포맷팅 및 표시
-    const formattedStores = this.formatStoreData(responseData);
-    console.log('포맷팅된 매장 목록:', formattedStores);
-    this.populateStoreSelectWithAllOption(formattedStores);
     
   } catch (error) {
     console.error('매장 목록 초기화 중 오류:', error);
@@ -424,7 +378,7 @@ formatStoreData(stores) {
 
 // 테스트 데이터 사용 함수
 useTestStoreData(isAdmin = false) {
-  console.log('인증 오류로 인해 테스트 매장 데이터 사용');
+  console.log('테스트 매장 데이터 사용');
   
   let mockStores = [
     {
@@ -438,6 +392,12 @@ useTestStoreData(isAdmin = false) {
       platform: '요기요',
       platform_code: 'YOG001',
       store_name: '테스트 매장 2'
+    },
+    {
+      store_code: 'STORE003',
+      platform: '쿠팡이츠',
+      platform_code: 'CPE001',
+      store_name: '테스트 매장 3'
     }
   ];
   
@@ -445,12 +405,6 @@ useTestStoreData(isAdmin = false) {
   if (isAdmin) {
     console.log('운영자용 확장 테스트 데이터 사용');
     mockStores = mockStores.concat([
-      {
-        store_code: 'STORE003',
-        platform: '쿠팡이츠',
-        platform_code: 'CPE001',
-        store_name: '테스트 매장 3'
-      },
       {
         store_code: 'STORE004',
         platform: '배달의민족',
@@ -466,22 +420,16 @@ useTestStoreData(isAdmin = false) {
     ]);
   }
   
-  // formatStoreData 함수 동작 직접 확인
-  const testFormat = mockStores.map(store => ({
-    label: `[${store.platform}] ${store.store_name} (${store.platform_code})`
-  }));
-  console.log('포맷 테스트:', testFormat);
+  // 테스트 데이터 저장 (나중에 API 호출에서 재사용하기 위해)
+  this.testStoresData = mockStores;
   
+  // 포맷팅 및 표시
   const formattedStores = this.formatStoreData(mockStores);
   console.log('포맷된 테스트 데이터:', formattedStores);
-  
-  // 각 아이템의 label 출력
-  formattedStores.forEach(store => {
-    console.log('매장 레이블:', store.label);
-  });
-  
   this.populateStoreSelectWithAllOption(formattedStores);
-  this.showAlert('API 서버 연결 실패, 테스트 데이터를 표시합니다.', 'warning');
+  this.showAlert('테스트 데이터를 사용 중입니다. 서버 연결을 확인하세요.', 'warning');
+  
+  return formattedStores;
 }
 
       // 대체 URL을 사용하는 폴백 메서드
@@ -1059,29 +1007,55 @@ async initializeStoreSelectFallback(userId) {
     }
 
     resetAndLoadData() {
-        // 페이지 상태 초기화
-        this.reviewsPage = 1;
-        this.allReviews = [];
-        this.hasMoreReviews = false;
+      // 페이지 상태 초기화
+      this.reviewsPage = 1;
+      this.allReviews = [];
+      this.hasMoreReviews = false;
+      
+      // 로딩 표시기 표시
+      this.showLoadingIndicator(true);
+      
+      // 필터 초기화
+      this.currentFilter = null;
+      document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+      
+      // 인증 상태 다시 확인
+      authService.checkAuth().then(isAuthenticated => {
+        console.log('인증 상태 재확인:', isAuthenticated ? '인증됨' : '인증 안됨');
         
-        // 로딩 표시기 표시
-        this.showLoadingIndicator(true);
-        
-        // 데이터 로드
-        if (this.selectedStoreData && this.selectedDateRange) {
+        // 세션이 여전히 유효하면 데이터 로드 시도
+        if (isAuthenticated) {
+          // 데이터 로드
+          if (this.selectedStoreData && this.selectedDateRange) {
             if (this.selectedStoreData.all_stores) {
-                this.loadAllStoresStats(this.selectedDateRange, this.selectedStoreData.store_codes);
+              this.loadAllStoresStats(this.selectedDateRange, this.selectedStoreData.store_codes);
             } else {
-                this.loadStatsAndReviews({
-                    ...this.selectedDateRange,
-                    store_code: this.selectedStoreData.store_code,
-                    platform_code: this.selectedStoreData.platform_code,
-                    platform: this.selectedStoreData.platform
-                });
+              this.loadStatsAndReviews({
+                ...this.selectedDateRange,
+                store_code: this.selectedStoreData.store_code,
+                platform_code: this.selectedStoreData.platform_code,
+                platform: this.selectedStoreData.platform
+              });
             }
-        } else {
+          } else {
             this.showLoadingIndicator(false);
+            this.showAlert('매장 또는 날짜를 선택해주세요', 'warning');
+          }
+        } else {
+          // 인증이 만료된 경우
+          this.showLoadingIndicator(false);
+          this.showAlert('세션이 만료되었습니다. 다시 로그인해주세요.', 'error');
+          
+          // 3초 후 로그인 페이지로 이동
+          setTimeout(() => {
+            window.location.href = '/login.html';
+          }, 3000);
         }
+      }).catch(error => {
+        console.error('인증 확인 오류:', error);
+        this.showLoadingIndicator(false);
+        this.showAlert('인증 상태 확인 중 오류가 발생했습니다', 'error');
+      });
     }
     
     showLoadingIndicator(show) {
@@ -1406,11 +1380,11 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
       if (platform) params.append('platform', platform);
       if (platform_code) params.append('platform_code', platform_code);
       
-      // 통계 데이터 API 호출 (단일 경로 사용)
-      const apiPath = `${CONFIG.API_BASE_URL}/stats-details`;
+      // 수정: 단일 API 경로 사용
+      const apiPath = `/.netlify/functions/stats-details`;
       
       try {
-        console.log(`통계 API 요청 시작: ${apiPath}?${params.toString()}`);
+        console.log(`통계 API 요청: ${apiPath}?${params.toString()}`);
         
         const response = await fetch(`${apiPath}?${params.toString()}`, {
           method: 'GET',
@@ -1424,6 +1398,13 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
         
         console.log(`API 응답 상태:`, response.status);
         
+        // 응답이 JSON인지 확인
+        const contentType = response.headers.get('Content-Type') || '';
+        if (!contentType.includes('application/json')) {
+          console.warn(`JSON이 아닌 응답 수신: ${contentType}`);
+          throw new Error('API 응답이 JSON 형식이 아닙니다');
+        }
+        
         if (!response.ok) {
           throw new Error(`API 요청 실패: ${response.status}`);
         }
@@ -1431,12 +1412,19 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
         const responseData = await response.json();
         console.log('API 응답 데이터:', responseData);
         
-        // 응답 데이터로 대시보드 업데이트
-        this.updateDashboard(responseData);
-      } catch (error) {
-        console.error('통계 데이터 로드 오류:', error);
+        // 응답에 데이터가 있는지 확인
+        if (!responseData.stats && !responseData.reviews) {
+          console.warn('API 응답에 유효한 데이터가 없음');
+          throw new Error('응답 데이터가 올바르지 않습니다');
+        }
         
-        // 오류 시 테스트 데이터 사용
+        // 대시보드 업데이트
+        this.updateDashboard(responseData);
+        
+      } catch (error) {
+        console.error('통계 데이터 로드 오류:', error.message);
+        
+        // 테스트 데이터로 대체
         console.log('테스트 데이터로 대체');
         const mockData = this.generateMockDataWithDates(
           store_code, 
