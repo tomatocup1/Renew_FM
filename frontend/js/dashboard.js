@@ -288,27 +288,19 @@ async initializeStoreSelect() {
     try {
       console.log('매장 정보 초기화 시작...');
       
-      // 먼저 인증 상태를 명시적으로 확인
-      if (!await authService.isAuthenticated()) {
-        console.error('인증되지 않음');
-        // 로그인 페이지로 이동하는 대신 테스트 데이터 사용
-        this.useTestStoreData();
-        return;
-      }
+      // 현재 사용자 정보 가져오기 (역할 확인을 위해)
+      const user = await authService.getCurrentUser();
+      console.log('현재 사용자 역할:', user?.role);
       
-      // 인증 헤더 확인
-      const authHeader = authService.getAuthHeader();
-      console.log('사용할 인증 헤더:', authHeader ? '존재함' : '없음');
-      
-      // API 호출 시도
+      // API 요청 시도
       try {
-        const functionUrl = `${CONFIG.API_BASE_URL}/stores-user-platform`;
+        const functionUrl = `${CONFIG.API_URL}/stores-user-platform`;
         console.log('API 요청 URL:', functionUrl);
         
         const response = await fetch(functionUrl, {
           method: 'GET',
           headers: {
-            'Authorization': authHeader,
+            'Authorization': authService.getAuthHeader(),
             'Accept': 'application/json'
           },
           credentials: 'include'
@@ -329,51 +321,40 @@ async initializeStoreSelect() {
           throw new Error('응답을 JSON으로 파싱할 수 없습니다');
         }
       
-      // 데이터 포맷팅 및 표시
-      const formattedStores = stores.map(store => ({
-        value: JSON.stringify({
-          store_code: store.store_code,
-          platform_code: store.platform_code || '',
-          platform: store.platform || '배달의민족'
-        }),
-        label: `[${store.platform || '배달의민족'}] ${store.store_name || store.store_code}`,
-        store_code: store.store_code
-      }));
-      
-      console.log('포맷팅된 매장 목록:', formattedStores);
-      this.populateStoreSelectWithAllOption(formattedStores);
-      
-    } catch (apiError) {
-      console.error('API 호출 오류:', apiError);
-      // 테스트 데이터로 대체
+        // 데이터 포맷팅 및 표시
+        const formattedStores = this.formatStoreData(stores);
+        console.log('포맷팅된 매장 목록:', formattedStores);
+        this.populateStoreSelectWithAllOption(formattedStores, user?.role === '운영자');
+        
+      } catch (apiError) {
+        console.error('API 호출 오류:', apiError);
+        // 테스트 데이터로 대체
+        this.useTestStoreData();
+      }
+    } catch (error) {
+      console.error('매장 목록 초기화 중 오류:', error);
+      this.showAlert('매장 정보를 불러오는데 실패했습니다.', 'error');
       this.useTestStoreData();
     }
-  } catch (error) {
-    console.error('매장 목록 초기화 중 오류:', error);
-    this.showAlert('매장 정보를 불러오는데 실패했습니다.', 'error');
-    this.useTestStoreData();
   }
-}
 
 // 매장 데이터 포맷팅 함수
 formatStoreData(stores) {
-  if (!Array.isArray(stores)) {
-    console.warn('매장 데이터가 배열이 아님:', stores);
-    return [];
+    if (!Array.isArray(stores)) {
+      console.warn('매장 데이터가 배열이 아님:', stores);
+      return [];
+    }
+    
+    return stores.map(store => ({
+      value: JSON.stringify({
+        store_code: store.store_code,
+        platform_code: store.platform_code || '',
+        platform: store.platform || '배달의민족'
+      }),
+      label: `[${store.platform || '배달의민족'}] ${store.store_name || store.store_code}${store.platform_code ? ` (${store.platform_code})` : ''}`,
+      store_code: store.store_code
+    }));
   }
-  
-  return stores.map(store => ({
-    value: JSON.stringify({
-      store_code: store.store_code,
-      platform_code: store.platform_code || '',
-      platform: store.platform || '배달의민족'
-    }),
-    label: store.platform_code ? 
-          `[${store.platform}] ${store.store_name} (${store.platform_code})` :
-          `[${store.platform || '배달의민족'}] ${store.store_name || store.store_code}`,
-    store_code: store.store_code
-  }));
-}
 
 // 테스트 데이터 사용 함수
 // dashboard.js의 매장 로드 함수에 추가
@@ -530,7 +511,8 @@ async initializeStoreSelectFallback(userId) {
         }
     }
     
-    populateStoreSelectWithAllOption(stores) {
+    // populateStoreSelectWithAllOption 함수 수정
+    populateStoreSelectWithAllOption(stores, isAdmin = false) {
         const storeSelect = document.getElementById('storeSelect');
         if (!storeSelect) return;
     
@@ -538,43 +520,44 @@ async initializeStoreSelectFallback(userId) {
         
         // store_code 기준으로 정렬
         const sortedStores = stores.sort((a, b) => {
-            return a.store_code?.localeCompare(b.store_code || '');
+        return a.store_code?.localeCompare(b.store_code || '');
         });
         
-        // 전체 매장 목록이 2개 이상일 때만 '전체 모아보기' 옵션 추가
-        if (sortedStores.length >= 2) {
-            // 모든 매장의 store_code 목록 만들기
-            const storeCodes = sortedStores.map(store => {
-                const data = JSON.parse(store.value);
-                return data.store_code;
-            });
-            
-            // 중복 제거
-            const uniqueStoreCodes = [...new Set(storeCodes)];
-            
-            const allOption = document.createElement('option');
-            allOption.value = JSON.stringify({
-                all_stores: true,
-                store_codes: uniqueStoreCodes
-            });
-            allOption.textContent = '📊 전체 모아보기';
-            storeSelect.appendChild(allOption);
+        // 운영자이거나 매장이 2개 이상일 때만 '전체 모아보기' 옵션 추가
+        if (isAdmin || sortedStores.length >= 2) {
+        // 모든 매장의 store_code 목록 만들기
+        const storeCodes = sortedStores.map(store => {
+            const data = JSON.parse(store.value);
+            return data.store_code;
+        });
+        
+        // 중복 제거
+        const uniqueStoreCodes = [...new Set(storeCodes)];
+        
+        const allOption = document.createElement('option');
+        allOption.value = JSON.stringify({
+            all_stores: true,
+            store_codes: uniqueStoreCodes
+        });
+        
+        // 운영자인 경우 특별 표시
+        allOption.textContent = isAdmin ? '🔍 전체 매장 보기 (운영자 전용)' : '📊 전체 모아보기';
+        storeSelect.appendChild(allOption);
         }
     
         // 개별 매장 옵션 추가
         sortedStores.forEach(store => {
-            const option = document.createElement('option');
-            option.value = store.value;
-            option.textContent = store.label;
-            storeSelect.appendChild(option);
+        const option = document.createElement('option');
+        option.value = store.value;
+        option.textContent = store.label;
+        storeSelect.appendChild(option);
         });
     
         if (!storeSelect.dataset.hasChangeListener) {
-            storeSelect.addEventListener('change', () => this.handleStoreChange());
-            storeSelect.dataset.hasChangeListener = 'true';
+        storeSelect.addEventListener('change', () => this.handleStoreChange());
+        storeSelect.dataset.hasChangeListener = 'true';
         }
     }
-
     initializeDatePicker() {
         const now = new Date();
         const startDate = this.getStartOfMonth(now);
