@@ -877,40 +877,44 @@ async initializeStoreSelectFallback(userId) {
         
         // 전체 모아보기인 경우
         if (this.selectedStoreData.all_stores) {
-            if (Array.isArray(this.selectedStoreData.store_codes)) {
-                this.selectedStoreData.store_codes.forEach(code => {
-                    params.append('store_code', code);
-                });
-            }
+          if (Array.isArray(this.selectedStoreData.store_codes)) {
+            this.selectedStoreData.store_codes.forEach(code => {
+              params.append('store_code', code);
+            });
+          }
         } else {
-            // 개별 매장인 경우
-            if (this.selectedStoreData.store_code) {
-                params.append('store_code', this.selectedStoreData.store_code);
-            }
-            
-            // platform_code 우선 사용 - 중요: 이 부분이 변경된 부분
-            if (this.selectedStoreData.platform_code) {
-                params.append('platform_code', this.selectedStoreData.platform_code);
-            }
-            
-            if (this.selectedStoreData.platform) {
-                params.append('platform', this.selectedStoreData.platform);
-            }
+          // 개별 매장인 경우
+          if (this.selectedStoreData.store_code) {
+            params.append('store_code', this.selectedStoreData.store_code);
+          }
+          
+          // platform_code 추가 (중요!)
+          if (this.selectedStoreData.platform_code) {
+            params.append('platform_code', this.selectedStoreData.platform_code);
+          }
+          
+          // platform 정보 추가
+          if (this.selectedStoreData.platform) {
+            params.append('platform', this.selectedStoreData.platform);
+          }
         }
         
         // 날짜 추가
         if (this.selectedDateRange) {
-            if (this.selectedDateRange.startDate) {
-                params.append('start_date', this.formatDateForAPI(this.selectedDateRange.startDate));
-            }
-            
-            if (this.selectedDateRange.endDate) {
-                params.append('end_date', this.formatDateForAPI(this.selectedDateRange.endDate));
-            }
+          if (this.selectedDateRange.startDate) {
+            params.append('start_date', this.formatDateForAPI(this.selectedDateRange.startDate));
+          }
+          
+          if (this.selectedDateRange.endDate) {
+            params.append('end_date', this.formatDateForAPI(this.selectedDateRange.endDate));
+          }
         }
         
+        // 디버깅을 위한 로그 추가
+        console.log('구성된 API 요청 파라미터:', params.toString());
+        
         return params;
-    }
+      }
     
     clearDashboard() {
         const reviewsBody = document.getElementById('reviewsBody');
@@ -1276,11 +1280,11 @@ async loadStoresByDirectMethod(userId) {
         return;
       }
       
-      // 날짜 형식화 (실제 선택된 날짜 사용)
+      // 날짜 형식화
       const formattedStartDate = this.formatDateForAPI(startDate);
       const formattedEndDate = this.formatDateForAPI(endDate);
       
-      console.log('통계 데이터 로드 중 (선택된 날짜):', { 
+      console.log('통계 데이터 로드 중:', { 
         store_code, 
         platform_code,
         platform,
@@ -1288,19 +1292,92 @@ async loadStoresByDirectMethod(userId) {
         endDate: formattedEndDate 
       });
       
-      // 서버 API 호출 우회 - 직접 테스트 데이터 생성
-      console.log('API 호출 우회, 선택된 날짜에 맞는 테스트 데이터 생성');
-      const mockData = this.generateMockDataWithDates(
-        store_code, 
-        platform_code, 
-        new Date(startDate), 
-        new Date(endDate)
-      );
+      // API 요청 파라미터 구성
+      const params = new URLSearchParams({
+        store_code: store_code,
+        start_date: formattedStartDate,
+        end_date: formattedEndDate
+      });
       
-      this.updateDashboard(mockData);
+      if (platform) params.append('platform', platform);
+      if (platform_code) params.append('platform_code', platform_code);
+      
+      // 통계 데이터 API 호출
+      const statsUrl = `${CONFIG.API_BASE_URL}/stats/details?${params.toString()}`;
+      console.log('통계 API 요청 URL:', statsUrl);
+      
+      try {
+        const statsResponse = await fetch(statsUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': authService.getAuthHeader(),
+            'Accept': 'application/json'
+          },
+          credentials: 'include'
+        });
+        
+        if (!statsResponse.ok) {
+          console.error('통계 데이터 API 오류:', statsResponse.status);
+          throw new Error(`통계 데이터를 불러오는데 실패했습니다. (${statsResponse.status})`);
+        }
+        
+        const data = await statsResponse.json();
+        console.log('API 응답 데이터:', data);
+        
+        // 데이터 유효성 검사
+        if (!data || (!data.stats && !data.reviews)) {
+          console.warn('API에서 유효한 데이터를 반환하지 않았습니다.');
+          throw new Error('유효한 데이터가 없습니다');
+        }
+        
+        // 응답 데이터로 대시보드 업데이트
+        this.updateDashboard(data);
+        
+      } catch (apiError) {
+        console.error('API 호출 오류:', apiError);
+        
+        // API 호출 실패시 최대 1번 재시도
+        try {
+          console.log('API 호출 재시도 중...');
+          
+          // 토큰 갱신 시도
+          await authService.refreshToken();
+          
+          const retryResponse = await fetch(statsUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': authService.getAuthHeader(),
+              'Accept': 'application/json'
+            },
+            credentials: 'include'
+          });
+          
+          if (!retryResponse.ok) {
+            throw new Error(`재시도 실패 (${retryResponse.status})`);
+          }
+          
+          const retryData = await retryResponse.json();
+          console.log('재시도 API 응답 데이터:', retryData);
+          
+          this.updateDashboard(retryData);
+          return;
+        } catch (retryError) {
+          console.error('API 재시도 실패:', retryError);
+          // 테스트 데이터로 폴백 (기존 코드 활용)
+          console.log('API 호출 실패로 인한 테스트 데이터 사용');
+          const mockData = this.generateMockDataWithDates(
+            store_code, 
+            platform_code, 
+            new Date(startDate), 
+            new Date(endDate)
+          );
+          this.updateDashboard(mockData);
+          this.showAlert('서버 연결에 실패하여 테스트 데이터를 표시합니다.', 'warning');
+        }
+      }
       
     } catch (error) {
-      console.error('Stats loading error:', error);
+      console.error('통계 데이터 로드 중 예외 발생:', error);
       // 테스트 데이터로 폴백
       const mockData = this.generateMockData(store_code, platform_code);
       this.updateDashboard(mockData);
