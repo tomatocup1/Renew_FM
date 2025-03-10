@@ -1076,7 +1076,7 @@ async initializeStoreSelectFallback(userId) {
         try {
             // 통계 데이터만 먼저 로드
             const statsPromises = storeCodes.map(storeCode => 
-                fetch(`${CONFIG.API_BASE_URL}/stats/details?store_code=${storeCode}&start_date=${this.formatDateForAPI(startDate)}&end_date=${this.formatDateForAPI(endDate)}`, {
+                fetch(`${CONFIG.API_BASE_URL}/stats-details?store_code=${storeCode}&start_date=${this.formatDateForAPI(startDate)}&end_date=${this.formatDateForAPI(endDate)}`, {
                     headers: {
                         'Authorization': authService.getAuthHeader(),
                         'Content-Type': 'application/json'
@@ -1305,9 +1305,9 @@ async loadStoresByDirectMethod(userId) {
       if (platform) params.append('platform', platform);
       if (platform_code) params.append('platform_code', platform_code);
       
-      // 수정된 부분: 올바른 API 엔드포인트 사용
-      // 'stats/details' 대신 'stats_detail' 사용
-      const statsUrl = `${CONFIG.API_BASE_URL}/stats_detail?${params.toString()}`;
+      // 수정된 부분: 올바른 API 엔드포인트 사용 (파일명과 일치시킴)
+      // 'stats_detail' 대신 'stats-details' 사용 (하이픈 사용, s 추가)
+      const statsUrl = `${CONFIG.API_BASE_URL}/stats-details?${params.toString()}`;
       console.log('통계 API 요청 URL:', statsUrl);
       
       try {
@@ -1340,14 +1340,18 @@ async loadStoresByDirectMethod(userId) {
       } catch (apiError) {
         console.error('API 호출 오류:', apiError);
         
-        // API 호출 실패시 최대 1번 재시도
+        // API 호출 실패시 최대 1번 재시도 (다른 이름 시도)
         try {
-          console.log('API 호출 재시도 중...');
+          console.log('API 호출 재시도 중... (대체 경로 시도)');
           
           // 토큰 갱신 시도
           await authService.refreshToken();
           
-          const retryResponse = await fetch(statsUrl, {
+          // 첫 번째 시도가 실패하면 다른 형식의 경로로 시도 (언더스코어 사용)
+          const fallbackUrl = `${CONFIG.API_BASE_URL}/stats_details?${params.toString()}`;
+          console.log('대체 URL 시도:', fallbackUrl);
+          
+          const retryResponse = await fetch(fallbackUrl, {
             method: 'GET',
             headers: {
               'Authorization': authService.getAuthHeader(),
