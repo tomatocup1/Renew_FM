@@ -1406,79 +1406,45 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
       if (platform) params.append('platform', platform);
       if (platform_code) params.append('platform_code', platform_code);
       
-      // 여러 API 경로 변형으로 시도 (하이픈/언더스코어 표기법, 경로 변형)
-      const apiPaths = [
-        `/api/stats-details?${params.toString()}`,           // 표준 API 경로 (netlify.toml 리다이렉트)
-        `/api/stats_details?${params.toString()}`,           // 언더스코어 변형
-        `/api/stats_detail?${params.toString()}`,            // 단수형 변형
-        `/api/stats-detail?${params.toString()}`,            // 단수형 하이픈 변형
-        `${CONFIG.API_BASE_URL}/stats-details?${params.toString()}`,  // 직접 Netlify 함수 경로
-        `${CONFIG.API_BASE_URL}/stats_details?${params.toString()}`,  // 직접 Netlify 함수 경로 (언더스코어)
-        `${CONFIG.API_BASE_URL}/stats-detail?${params.toString()}`,   // 단수형
-        `${CONFIG.API_BASE_URL}/stats_detail?${params.toString()}`    // 단수형 언더스코어
-      ];
+      // 통계 데이터 API 호출 (단일 경로 사용)
+      const apiPath = `${CONFIG.API_BASE_URL}/stats-details`;
       
-      let responseData = null;
-      let successPath = '';
-      
-      // 모든 가능한 경로 시도
-      for (const apiPath of apiPaths) {
-        try {
-          console.log(`통계 API 요청 시도: ${apiPath}`);
-          
-          const response = await fetch(apiPath, {
-            method: 'GET',
-            headers: {
-              'Authorization': authService.getAuthHeader(),
-              'Accept': 'application/json'
-            },
-            credentials: 'include'
-          });
-          
-          console.log(`${apiPath} 응답 상태:`, response.status);
-          
-          // 응답이 JSON인지 확인
-          const contentType = response.headers.get('Content-Type') || '';
-          if (!contentType.includes('application/json')) {
-            console.warn(`${apiPath}에서 JSON이 아닌 응답 수신: ${contentType}`);
-            continue; // JSON이 아니면 다음 경로 시도
-          }
-          
-          if (!response.ok) {
-            console.warn(`${apiPath} 응답 실패:`, response.status);
-            continue; // 실패 시 다음 경로 시도
-          }
-          
-          responseData = await response.json();
-          successPath = apiPath;
-          console.log(`성공한 통계 API 경로: ${apiPath}`);
-          break;
-        } catch (pathError) {
-          console.warn(`${apiPath} 요청 오류:`, pathError.message);
-        }
-      }
-      
-      // 데이터를 성공적으로 가져왔으면 대시보드 업데이트
-      if (responseData) {
-        console.log('API 응답 데이터:', responseData);
+      try {
+        console.log(`통계 API 요청 시작: ${apiPath}?${params.toString()}`);
         
-        // 데이터 유효성 검사
-        if (!responseData.stats && !responseData.reviews) {
-          console.warn('API에서 유효한 데이터를 반환하지 않았습니다.');
-          throw new Error('유효한 데이터가 없습니다');
+        const response = await fetch(`${apiPath}?${params.toString()}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': authService.getAuthHeader(),
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
+        
+        console.log(`API 응답 상태:`, response.status);
+        
+        if (!response.ok) {
+          throw new Error(`API 요청 실패: ${response.status}`);
         }
+        
+        const responseData = await response.json();
+        console.log('API 응답 데이터:', responseData);
         
         // 응답 데이터로 대시보드 업데이트
         this.updateDashboard(responseData);
-      } else {
-        // 모든 API 경로 시도 실패 시 테스트 데이터 사용
-        console.log('모든 API 경로 시도 실패, 테스트 데이터 사용');
+      } catch (error) {
+        console.error('통계 데이터 로드 오류:', error);
+        
+        // 오류 시 테스트 데이터 사용
+        console.log('테스트 데이터로 대체');
         const mockData = this.generateMockDataWithDates(
           store_code, 
           platform_code, 
           new Date(startDate), 
           new Date(endDate)
         );
+        
         this.updateDashboard(mockData);
         this.showAlert('서버 연결에 실패하여 테스트 데이터를 표시합니다.', 'warning');
       }
