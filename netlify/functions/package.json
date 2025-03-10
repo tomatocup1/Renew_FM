@@ -1,8 +1,8 @@
 {
-    "name": "netlify-functions",
-    "version": "1.0.0",
-    "description": "Netlify Functions for Auto-Reply System",
-    "dependencies": {
-      "@supabase/supabase-js": "^2.21.0"
-    }
+  "name": "netlify-functions",
+  "version": "1.0.0",
+  "description": "Netlify Functions",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.21.0"
   }
+}

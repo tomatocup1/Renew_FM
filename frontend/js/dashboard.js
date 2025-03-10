@@ -298,159 +298,106 @@ async initializeStoreSelect() {
     
     console.log('사용자 정보:', user);
     
-    // API 호출 대신 테스트 데이터 사용
-    console.log('API 함수가 존재하지 않아 테스트 데이터를 사용합니다');
-    
-    // 테스트 매장 데이터
-    const mockStores = [
-      {
-        store_code: 'STORE001',
-        platform: '배달의민족',
-        platform_code: '',
-        store_name: '테스트 매장 1'
-      },
-      {
-        store_code: 'STORE002',
-        platform: '요기요',
-        platform_code: 'YOG001',
-        store_name: '테스트 매장 2'
-      },
-      {
-        store_code: 'STORE003',
-        platform: '쿠팡이츠',
-        platform_code: 'CPE001',
-        store_name: '테스트 매장 3'
+    // API 호출 시도
+    try {
+      // 함수 이름이 변경됨을 명시
+      const functionUrl = `${CONFIG.API_BASE_URL}/stores-user-platform`;
+      console.log('API 요청 URL:', functionUrl);
+      
+      const response = await fetch(functionUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': authService.getAuthHeader(),
+          'Accept': 'application/json'
+        }
+      });
+      
+      console.log('API 응답 상태:', response.status);
+      
+      // 응답 성공 확인
+      if (!response.ok) {
+        throw new Error(`API 요청 실패: ${response.status}`);
       }
-    ];
-    
-    console.log('테스트 매장 데이터:', mockStores);
-    
-    // 데이터 포맷팅
-    const formattedStores = mockStores.map(store => ({
-      value: JSON.stringify({
-        store_code: store.store_code,
-        platform_code: store.platform_code || '',
-        platform: store.platform || '배달의민족'
-      }),
-      label: store.platform_code ? 
-             `[${store.platform}] ${store.store_name} (${store.platform_code})` :
-             `[${store.platform}] ${store.store_name}`,
-      store_code: store.store_code
-    }));
-    
-    console.log('포맷팅된 매장 목록:', formattedStores);
-    this.populateStoreSelectWithAllOption(formattedStores);
-    
+      
+      // 응답 타입 확인
+      const contentType = response.headers.get('content-type');
+      console.log('응답 콘텐츠 타입:', contentType);
+      
+      // JSON 형식이 아닌 경우 텍스트로 읽고 오류 표시
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('JSON이 아닌 응답 (내용):', text);
+        throw new Error('서버가 유효한 JSON을 반환하지 않았습니다');
+      }
+      
+      const stores = await response.json();
+      console.log('API 응답 데이터:', stores);
+      
+      // 포맷팅 및 표시
+      const formattedStores = this.formatStoreData(stores);
+      this.populateStoreSelectWithAllOption(formattedStores);
+      
+    } catch (apiError) {
+      console.error('API 호출 오류:', apiError);
+      // 테스트 데이터로 대체
+      this.useTestStoreData();
+    }
   } catch (error) {
-    console.error('매장 목록 초기화 중 오류 발생:', error);
-    this.showAlert('매장 정보를 불러오는데 실패했습니다. 새로고침 후 다시 시도해주세요.', 'error');
+    console.error('매장 목록 초기화 중 오류:', error);
+    this.showAlert('매장 정보를 불러오는데 실패했습니다.', 'error');
+    this.useTestStoreData();
   }
 }
-        
-    // 기존 initializeStoreSelectFallback 함수를 수정합니다
-async initializeStoreSelectFallback(userId) {
-    console.log('폴백 매장 로드 시도 중... 사용자 ID:', userId);
-    
-    try {
-      // 다양한 대체 URL 시도 - Netlify 함수 경로로 수정
-      const baseUrl = window.location.origin;
-      
-      // 테스트 환경에서 문제가 지속되면 직접 메서드로 대체
-      if (window.location.hostname === 'wealthfm.co.kr' || window.location.hostname === 'www.wealthfm.co.kr') {
-        return await this.loadStoresByDirectMethod(userId);
-      }
-      
-      const possibleEndpoints = [
-        `${baseUrl}/.netlify/functions/user-stores?userId=${userId}`,
-        `${baseUrl}/.netlify/functions/stores-user-stores?userId=${userId}`,
-        `${baseUrl}/.netlify/functions/users-stores?userId=${userId}`
-      ];
-      
-      let stores = null;
-      let successUrl = '';
-      
-      // 가능한 모든 엔드포인트 시도
-      for (const endpoint of possibleEndpoints) {
-        try {
-          console.log(`API 엔드포인트 시도: ${endpoint}`);
-          const response = await fetch(endpoint, {
-            method: 'GET',
-            headers: {
-              'Authorization': authService.getAuthHeader(),
-              'Accept': 'application/json'
-            },
-            credentials: 'include'
-          });
-          
-          if (response.ok) {
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-              console.warn('JSON이 아닌 응답:', contentType);
-              continue;
-            }
-            
-            stores = await response.json();
-            successUrl = endpoint;
-            console.log(`성공한 API 엔드포인트: ${endpoint}`);
-            break;
-          } else {
-            console.log(`엔드포인트 ${endpoint} 응답 코드: ${response.status}`);
-          }
-        } catch (error) {
-          console.log(`엔드포인트 ${endpoint} 오류:`, error);
-        }
-      }
-      
-      if (!stores || stores.length === 0) {
-        console.warn('폴백: 모든 API 호출 실패, 테스트 데이터 사용');
-        return await this.loadStoresByDirectMethod(userId);
-      }
-      
-      console.log(`폴백 성공 (${successUrl}): 매장 데이터:`, stores);
-      
-      // 매장 데이터 형식에 따라 처리 로직 분기
-      let formattedStores;
-      
-      // 데이터 형식 분석
-      const isDetailedFormat = stores.some(store => 
-        store.store_name !== undefined || store.platform !== undefined);
-      
-      if (isDetailedFormat) {
-        // 이미 형식화된 데이터
-        formattedStores = stores.map(store => ({
-          value: JSON.stringify({
-            store_code: store.store_code,
-            platform_code: store.platform_code || '',
-            platform: store.platform || '배달의민족'
-          }),
-          label: store.platform ? 
-                `[${store.platform}] ${store.store_name || store.store_code}` :
-                `[배달의민족] ${store.store_name || store.store_code}`,
-          store_code: store.store_code
-        }));
-      } else {
-        // 간단한 store_code만 있는 형식
-        formattedStores = stores.map(store => ({
-          value: JSON.stringify({
-            store_code: typeof store === 'string' ? store : store.store_code,
-            platform_code: '',
-            platform: '배달의민족'
-          }),
-          label: `[배달의민족] ${typeof store === 'string' ? store : store.store_code}`,
-          store_code: typeof store === 'string' ? store : store.store_code
-        }));
-      }
-      
-      console.log('폴백: 포맷팅된 매장 목록:', formattedStores);
-      this.populateStoreSelectWithAllOption(formattedStores);
-      return formattedStores;
-    } catch (error) {
-      console.error('폴백 매장 로드 실패:', error);
-      this.showAlert('매장 정보를 불러오는데 실패했습니다.', 'error');
-      // 최종 폴백: 테스트 데이터 사용
-      return await this.loadStoresByDirectMethod(userId);
-    }
+
+// 매장 데이터 포맷팅 함수
+formatStoreData(stores) {
+  if (!Array.isArray(stores)) {
+    console.warn('매장 데이터가 배열이 아님:', stores);
+    return [];
   }
+  
+  return stores.map(store => ({
+    value: JSON.stringify({
+      store_code: store.store_code,
+      platform_code: store.platform_code || '',
+      platform: store.platform || '배달의민족'
+    }),
+    label: store.platform_code ? 
+          `[${store.platform}] ${store.store_name} (${store.platform_code})` :
+          `[${store.platform || '배달의민족'}] ${store.store_name || store.store_code}`,
+    store_code: store.store_code
+  }));
+}
+
+// 테스트 데이터 사용 함수
+useTestStoreData() {
+  console.log('테스트 매장 데이터 사용');
+  
+  const mockStores = [
+    {
+      store_code: 'STORE001',
+      platform: '배달의민족',
+      platform_code: '',
+      store_name: '테스트 매장 1'
+    },
+    {
+      store_code: 'STORE002',
+      platform: '요기요',
+      platform_code: 'YOG001',
+      store_name: '테스트 매장 2'
+    },
+    {
+      store_code: 'STORE003',
+      platform: '쿠팡이츠',
+      platform_code: 'CPE001',
+      store_name: '테스트 매장 3'
+    }
+  ];
+  
+  const formattedStores = this.formatStoreData(mockStores);
+  this.populateStoreSelectWithAllOption(formattedStores);
+  this.showAlert('API 서버 연결 실패, 테스트 데이터를 표시합니다.', 'warning');
+}
 
       // 대체 URL을 사용하는 폴백 메서드
 async initializeStoreSelectFallback(userId) {
