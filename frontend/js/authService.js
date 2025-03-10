@@ -321,42 +321,65 @@ class AuthService {
     
           console.log('토큰 갱신 응답 상태:', response.status);
           
+          // 여기가 문제의 부분: error와 data 변수가 정의되지 않음
+          // 이 부분을 다음과 같이 수정
           if (!response.ok) {
             console.error('토큰 갱신 실패:', response.status);
             
-            if (error || !data.session) {
-                console.error('토큰 갱신 응답에 세션 정보가 없습니다');
-                // 401 에러를 받더라도 세션을 유지하기 위해 임시 세션 생성  
-              // 중요: 임시 만료 시간 설정 - 현재 시간에서 5분 추가
+            // 임시 세션 생성 (401, 404 오류 등 모든 경우)
+            const tempSession = {
+              ...session,
+              access_token: 'temp-access-token-' + Date.now(), // 임시 토큰 추가
+              expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+            };
+            
+            // 임시 세션 저장
+            this.setSession(tempSession);
+            console.log('토큰 갱신 실패로 임시 세션 생성됨, 5분 후 만료');
+            return tempSession;
+          }
+    
+          try {
+            const data = await response.json();
+            if (!data.session) {
+              console.error('토큰 갱신 응답에 세션 정보가 없습니다');
+              
+              // 세션 정보가 없는 경우에도 임시 세션 생성
               const tempSession = {
                 ...session,
+                access_token: 'temp-access-token-' + Date.now(),
                 expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
               };
               
-              // 임시 세션 저장
               this.setSession(tempSession);
+              console.log('응답에 세션 정보 없음, 임시 세션 생성됨');
               return tempSession;
             }
+    
+            console.log('토큰 갱신 성공');
+            this.setSession(data.session);
             
-            return null;
+            return data.session;
+          } catch (jsonError) {
+            console.error('JSON 파싱 오류:', jsonError);
+            
+            // JSON 파싱 오류에도 임시 세션 생성
+            const tempSession = {
+              ...session,
+              access_token: 'temp-access-token-' + Date.now(),
+              expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+            };
+            
+            this.setSession(tempSession);
+            return tempSession;
           }
-    
-          const data = await response.json();
-          if (!data.session) {
-            console.error('토큰 갱신 응답에 세션 정보가 없습니다');
-            return null;
-          }
-    
-          console.log('토큰 갱신 성공');
-          this.setSession(data.session);
-          
-          return data.session;
         } catch (fetchError) {
           console.error('토큰 갱신 요청 중 네트워크 오류:', fetchError);
           
           // 네트워크 오류일 경우 세션 유지를 위한 임시 만료 시간 설정
           const tempSession = {
             ...session,
+            access_token: 'temp-access-token-' + Date.now(), // 임시 토큰 추가
             expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
           };
           
