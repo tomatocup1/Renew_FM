@@ -32,6 +32,12 @@
   query = {userId = ":userId"}
   force = true
 
+[[redirects]]
+  from = "/api/auth/*"
+  to = "/.netlify/functions/auth/:splat"
+  status = 200
+  force = true
+  
 # 규칙 세부 정보 API (path 파라미터 사용)
 [[redirects]]
   from = "/api/rules/:ruleId"
