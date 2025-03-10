@@ -1,7 +1,7 @@
 // frontend/js/config.js
 export const CONFIG = {
-  // API 기본 URL 경로를 상대 경로에서 Netlify 함수 경로로 변경
-  API_BASE_URL: `${window.location.origin}/.netlify/functions`,
+  // API 기본 URL 경로를 Netlify Functions 경로로 변경
+  API_BASE_URL: `/.netlify/functions`,
   DEFAULT_DATE_RANGE: 7,
   CHART_COLORS: {
       rating5: '#4CAF50',

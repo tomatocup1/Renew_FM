@@ -217,18 +217,18 @@ class RulesManager {
         platform_code: storeData.platform_code || ''
       });
       
-      const response = await fetch(`${this.API_URL}/rules?${params.toString()}`, {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/rules?${params.toString()}`, {
         method: 'GET',
         headers: {
           'Authorization': authService.getAuthHeader(),
           'Accept': 'application/json'
         }
       });
-
+  
       if (!response.ok) {
         throw new Error('규칙 정보를 불러오는데 실패했습니다.');
       }
-
+  
       const rules = await response.json();
       
       // 해당 매장+플랫폼 규칙 찾기
@@ -250,10 +250,10 @@ class RulesManager {
           );
         }
       }
-
+  
       this.ruleData = rule;
       this.populateForms(rule);
-
+  
     } catch (error) {
       console.error('Rule data load error:', error);
       this.showAlert('규칙 정보를 불러오는데 실패했습니다.', 'danger');
@@ -381,8 +381,8 @@ class RulesManager {
         greeting_end: this.greetingEndInput.value.trim()
       };
       
-      // Netlify 함수 경로로 변경
-      const response = await fetch(`${this.API_URL}/rules-detail/${ruleId}`, {
+      // Netlify 함수 경로 사용
+      const response = await fetch(`${CONFIG.API_BASE_URL}/rules-detail/${ruleId}`, {
         method: 'PUT',
         headers: {
           'Authorization': authService.getAuthHeader(),

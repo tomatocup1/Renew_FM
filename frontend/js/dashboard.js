@@ -285,96 +285,90 @@ applyCalendarStyles() {
 
     
 async initializeStoreSelect() {
+  try {
+    console.log('매장 정보 초기화 시작...');
+    
+    const user = await authService.getCurrentUser();
+    if (!user?.id) {
+      console.error('사용자 정보를 가져올 수 없습니다');
+      this.showAlert('사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.', 'error');
+      setTimeout(() => window.location.href = '/login.html', 2000);
+      return;
+    }
+    
+    console.log('사용자 정보:', user);
+    
+    // Netlify Functions 경로 사용
+    const functionUrl = `${CONFIG.API_BASE_URL}/stores-user-platform`;
+    console.log('API 요청 URL:', functionUrl);
+    
     try {
-      console.log('매장 정보 초기화 시작...');
+      const response = await fetch(functionUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': authService.getAuthHeader(),
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      });
+    
+      console.log('API 응답 상태:', response.status);
       
-      const user = await authService.getCurrentUser();
-      if (!user?.id) {
-        console.error('사용자 정보를 가져올 수 없습니다');
-        this.showAlert('사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.', 'error');
-        setTimeout(() => window.location.href = '/login.html', 2000);
-        return;
-      }
-      
-      console.log('사용자 정보:', user);
-      
-      // 절대 경로 사용 (netlify 함수 직접 호출)
-      const baseUrl = window.location.origin;
-      console.log('기본 URL:', baseUrl);
-      
-      try {
-        // 함수 직접 호출
-        const functionUrl = `${baseUrl}/.netlify/functions/stores-user-platform`;
-        console.log('API 요청 URL:', functionUrl);
-        
-        const response = await fetch(functionUrl, {
-          method: 'GET',
-          headers: {
-            'Authorization': authService.getAuthHeader(),
-            'Accept': 'application/json'
-          },
-          credentials: 'include'
-        });
-      
-        console.log('API 응답 상태:', response.status);
-        const contentType = response.headers.get('content-type');
-        console.log('응답 콘텐츠 타입:', contentType);
-        
-        if (!response.ok) {
-          console.log('API 요청 실패, 대체 메서드 시도');
-          return await this.loadStoresByDirectMethod(user.id);
-        }
-        
-        // 콘텐츠 타입 확인
-        if (!contentType || !contentType.includes('application/json')) {
-          console.warn('JSON이 아닌 응답:', contentType);
-          const text = await response.text();
-          console.log('비JSON 응답 내용(일부):', text.substring(0, 100));
-          return await this.loadStoresByDirectMethod(user.id);
-        }
-        
-        const stores = await response.json();
-        console.log('매장 데이터:', stores);
-      
-        if (!Array.isArray(stores) || stores.length === 0) {
-          console.warn('매장 정보가 없습니다');
-          this.showAlert('표시할 매장 정보가 없습니다. 관리자에게 매장 할당을 요청하세요.', 'warning');
-          return;
-        }
-      
-        // 중복 제거 및 포맷팅 처리
-        const uniqueStores = {};
-        stores.forEach(store => {
-          const key = `${store.store_code}-${store.platform_code || ''}`;
-          if (!uniqueStores[key]) {
-            uniqueStores[key] = store;
-          }
-        });
-      
-        const formattedStores = Object.values(uniqueStores).map(store => ({
-          value: JSON.stringify({
-            store_code: store.store_code,
-            platform_code: store.platform_code || '',
-            platform: store.platform || '배달의민족'
-          }),
-          label: store.platform_code ? 
-                 `[${store.platform || '배달의민족'}] ${store.store_name} (${store.platform_code})` :
-                 `[배달의민족] ${store.store_name}`,
-          store_code: store.store_code
-        }));
-      
-        console.log('포맷팅된 매장 목록:', formattedStores);
-        this.populateStoreSelectWithAllOption(formattedStores);
-      } catch (apiError) {
-        console.error('API 호출 중 오류:', apiError);
-        // 대체 매장 로드 방식 시도
+      if (!response.ok) {
+        console.log('API 요청 실패, 대체 메서드 시도');
         return await this.loadStoresByDirectMethod(user.id);
       }
-    } catch (error) {
-      console.error('매장 목록 초기화 중 오류 발생:', error);
-      this.showAlert('매장 정보를 불러오는데 실패했습니다. 새로고침 후 다시 시도해주세요.', 'error');
+      
+      // 응답 처리
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('JSON이 아닌 응답:', contentType);
+        const text = await response.text();
+        console.log('비JSON 응답 내용(일부):', text.substring(0, 100));
+        return await this.loadStoresByDirectMethod(user.id);
+      }
+      
+      const stores = await response.json();
+      console.log('매장 데이터:', stores);
+    
+      if (!Array.isArray(stores) || stores.length === 0) {
+        console.warn('매장 정보가 없습니다');
+        this.showAlert('표시할 매장 정보가 없습니다. 관리자에게 매장 할당을 요청하세요.', 'warning');
+        return;
+      }
+    
+      // 중복 제거 및 포맷팅 처리
+      const uniqueStores = {};
+      stores.forEach(store => {
+        const key = `${store.store_code}-${store.platform_code || ''}`;
+        if (!uniqueStores[key]) {
+          uniqueStores[key] = store;
+        }
+      });
+    
+      const formattedStores = Object.values(uniqueStores).map(store => ({
+        value: JSON.stringify({
+          store_code: store.store_code,
+          platform_code: store.platform_code || '',
+          platform: store.platform || '배달의민족'
+        }),
+        label: store.platform_code ? 
+               `[${store.platform || '배달의민족'}] ${store.store_name} (${store.platform_code})` :
+               `[배달의민족] ${store.store_name}`,
+        store_code: store.store_code
+      }));
+    
+      console.log('포맷팅된 매장 목록:', formattedStores);
+      this.populateStoreSelectWithAllOption(formattedStores);
+    } catch (apiError) {
+      console.error('API 호출 중 오류:', apiError);
+      return await this.loadStoresByDirectMethod(user.id);
     }
+  } catch (error) {
+    console.error('매장 목록 초기화 중 오류 발생:', error);
+    this.showAlert('매장 정보를 불러오는데 실패했습니다. 새로고침 후 다시 시도해주세요.', 'error');
   }
+}
         
     // 기존 initializeStoreSelectFallback 함수를 수정합니다
 async initializeStoreSelectFallback(userId) {
@@ -1334,7 +1328,7 @@ async loadStoresByDirectMethod(userId) {
     }
   }
 
-async loadStatsAndReviews({ startDate, endDate, store_code, platform_code, platform } = {}) {
+  async loadStatsAndReviews({ startDate, endDate, store_code, platform_code, platform } = {}) {
     try {
       // 로딩 표시기 표시
       this.showLoadingIndicator(true);
@@ -1380,9 +1374,8 @@ async loadStatsAndReviews({ startDate, endDate, store_code, platform_code, platf
       // 한 번에 가져올 리뷰 수를 제한
       params.append('limit', this.reviewsPerPage.toString());
       
-      // 절대 경로로 URL 변경
-      const baseUrl = window.location.origin;
-      const url = `${baseUrl}/.netlify/functions/stats-details?${params.toString()}`;
+      // Netlify Functions 경로 사용
+      const url = `${CONFIG.API_BASE_URL}/stats-details?${params.toString()}`;
       console.log('Requesting URL:', url);
   
       const response = await fetch(url, {
