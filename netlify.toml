@@ -1,14 +1,7 @@
 [build]
-  command = "npm install && npm run build"
+  command = "echo 'Skipping build step - static site'"
   publish = "frontend"
   functions = "netlify/functions"
-
-# Netlify Functions 직접 접근 허용
-[[redirects]]
-  from = "/.netlify/functions/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-  force = true
 
 # 일반 API 경로 처리 (캐치올 리다이렉트)
 [[redirects]]
