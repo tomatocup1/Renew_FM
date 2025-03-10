@@ -962,7 +962,7 @@ async initializeStoreSelectFallback(userId) {
             this.showAlert('매장 정보 처리 중 오류가 발생했습니다', 'error');
         }
     }
-    
+
     resetAndLoadData() {
         // 페이지 상태 초기화
         this.reviewsPage = 1;
@@ -1262,7 +1262,7 @@ async loadStoresByDirectMethod(userId) {
   }
 
   // dashboard.js에서 loadStatsAndReviews 함수 수정
-async loadStatsAndReviews({ startDate, endDate, store_code, platform_code, platform } = {}) {
+  async loadStatsAndReviews({ startDate, endDate, store_code, platform_code, platform } = {}) {
     try {
       // 로딩 표시기 표시
       this.showLoadingIndicator(true);
@@ -1285,34 +1285,45 @@ async loadStatsAndReviews({ startDate, endDate, store_code, platform_code, platf
         endDate: formattedEndDate 
       });
       
-      // API 요청 URL 구성
-      let url = `${CONFIG.API_BASE_URL}/stats-details?store_code=${store_code}`;
+      // API 요청 URL 구성 (슬래시 확인)
+      let url = `${CONFIG.API_BASE_URL}/stats-details`; // 슬래시 없이 정확한 함수명 사용
+      
+      // 쿼리 파라미터 구성
+      const params = new URLSearchParams();
+      params.append('store_code', store_code);
       
       if (formattedStartDate) {
-        url += `&start_date=${formattedStartDate}`;
+        params.append('start_date', formattedStartDate);
       }
       
       if (formattedEndDate) {
-        url += `&end_date=${formattedEndDate}`;
+        params.append('end_date', formattedEndDate);
       }
       
       if (platform_code) {
-        url += `&platform_code=${platform_code}`;
+        params.append('platform_code', platform_code);
       }
       
       if (platform) {
-        url += `&platform=${platform}`;
+        params.append('platform', platform);
       }
+      
+      // 최종 URL 생성
+      url = `${url}?${params.toString()}`;
+      console.log('실제 API 요청 URL:', url);
       
       // API 요청
       const response = await fetch(url, {
         headers: {
           'Authorization': authService.getAuthHeader(),
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API 오류 응답:', errorText);
         throw new Error(`API 요청 실패: ${response.status} ${response.statusText}`);
       }
       
