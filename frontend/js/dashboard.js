@@ -392,8 +392,8 @@ useTestStoreData() {
         store_name: '테스트 매장 2'
       }
     ];
-    
-    this.populateStoreSelect(mockStores);
+    const formattedStores = this.formatStoreData(mockStores);
+    this.populateStoreSelectWithAllOption(formattedStores);
     this.showAlert('API 서버 연결 실패, 테스트 데이터를 표시합니다.', 'warning');
   }
 
