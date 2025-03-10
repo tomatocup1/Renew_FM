@@ -300,41 +300,48 @@ async initializeStoreSelect() {
     
     // API 호출 시도
     try {
-      // 함수 이름이 변경됨을 명시
       const functionUrl = `${CONFIG.API_BASE_URL}/stores-user-platform`;
       console.log('API 요청 URL:', functionUrl);
       
       const response = await fetch(functionUrl, {
         method: 'GET',
         headers: {
-          'Authorization': authService.getAuthHeader(),
           'Accept': 'application/json'
         }
       });
       
       console.log('API 응답 상태:', response.status);
       
-      // 응답 성공 확인
-      if (!response.ok) {
-        throw new Error(`API 요청 실패: ${response.status}`);
+      // 내용 출력
+      const responseText = await response.text();
+      console.log('API 응답 내용:', responseText);
+      
+      // 응답 형식에 따라 처리
+      let stores;
+      try {
+        stores = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('JSON 파싱 오류:', parseError);
+        throw new Error('응답을 JSON으로 파싱할 수 없습니다');
       }
       
-      // 응답 타입 확인
-      const contentType = response.headers.get('content-type');
-      console.log('응답 콘텐츠 타입:', contentType);
-      
-      // JSON 형식이 아닌 경우 텍스트로 읽고 오류 표시
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('JSON이 아닌 응답 (내용):', text);
-        throw new Error('서버가 유효한 JSON을 반환하지 않았습니다');
+      if (!Array.isArray(stores)) {
+        console.error('매장 데이터가 배열이 아닙니다:', stores);
+        throw new Error('유효한 매장 데이터가 아닙니다');
       }
       
-      const stores = await response.json();
-      console.log('API 응답 데이터:', stores);
+      // 데이터 포맷팅 및 표시
+      const formattedStores = stores.map(store => ({
+        value: JSON.stringify({
+          store_code: store.store_code,
+          platform_code: store.platform_code || '',
+          platform: store.platform || '배달의민족'
+        }),
+        label: `[${store.platform || '배달의민족'}] ${store.store_name || store.store_code}`,
+        store_code: store.store_code
+      }));
       
-      // 포맷팅 및 표시
-      const formattedStores = this.formatStoreData(stores);
+      console.log('포맷팅된 매장 목록:', formattedStores);
       this.populateStoreSelectWithAllOption(formattedStores);
       
     } catch (apiError) {

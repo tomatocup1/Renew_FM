@@ -1,21 +1,27 @@
 // netlify/functions/stores-user-platform.js
-exports.handler = async (event, context) => {
+exports.handler = async function(event, context) {
+  console.log('stores-user-platform 함수 호출됨');
+  console.log('요청 메서드:', event.httpMethod);
+  
   // CORS 헤더 설정
   const headers = {
+    'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Content-Type': 'application/json'
+    'Access-Control-Allow-Methods': 'GET, OPTIONS'
   };
-
+  
   // OPTIONS 요청 처리
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers };
+    return {
+      statusCode: 200,
+      headers
+    };
   }
-
+  
   try {
-    // 간단한 테스트 데이터 반환
-    const mockStores = [
+    // 간단한 테스트 데이터
+    const stores = [
       {
         store_code: 'STORE001',
         platform: '배달의민족',
@@ -35,14 +41,16 @@ exports.handler = async (event, context) => {
         store_name: '테스트 매장 3'
       }
     ];
-
+    
+    // 응답 반환
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify(mockStores)
+      body: JSON.stringify(stores)
     };
   } catch (error) {
-    console.error('Function error:', error);
+    console.error('함수 오류:', error);
+    
     return {
       statusCode: 500,
       headers,
