@@ -305,7 +305,7 @@ async initializeStoreSelect() {
 
     // 간소화된 API 경로 - 단일 엔드포인트 사용
     // 수정: 서버 URL 경로에 맞게 API 엔드포인트 수정
-    const apiEndpoint = '/.netlify/functions/stores-user-platform';
+    const apiEndpoint = '/api/stores-user-platform';
     
     try {
       console.log(`API 요청 시작: ${apiEndpoint}`);
@@ -1381,7 +1381,7 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
       if (platform_code) params.append('platform_code', platform_code);
       
       // 수정: 단일 API 경로 사용
-      const apiPath = `/.netlify/functions/stats-details`;
+      const apiPath = `/api/stats-details`;
       
       try {
         console.log(`통계 API 요청: ${apiPath}?${params.toString()}`);
