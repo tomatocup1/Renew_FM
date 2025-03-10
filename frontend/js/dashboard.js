@@ -1285,62 +1285,98 @@ async loadStoresByDirectMethod(userId) {
         endDate: formattedEndDate 
       });
       
-      // API 요청 URL 구성 (슬래시 확인)
-      let url = `${CONFIG.API_BASE_URL}/stats-details`; // 슬래시 없이 정확한 함수명 사용
+      // 여러 가능한 API 엔드포인트 시도
+      const possibleEndpoints = [
+        `${CONFIG.API_BASE_URL}/stats-details`,
+        `${CONFIG.API_BASE_URL}/stats/details`,  // 슬래시 추가
+        `${CONFIG.API_BASE_URL}/stats`           // 다른 경로 시도
+      ];
       
-      // 쿼리 파라미터 구성
-      const params = new URLSearchParams();
-      params.append('store_code', store_code);
+      let responseData = null;
+      let error = null;
       
-      if (formattedStartDate) {
-        params.append('start_date', formattedStartDate);
-      }
-      
-      if (formattedEndDate) {
-        params.append('end_date', formattedEndDate);
-      }
-      
-      if (platform_code) {
-        params.append('platform_code', platform_code);
-      }
-      
-      if (platform) {
-        params.append('platform', platform);
-      }
-      
-      // 최종 URL 생성
-      url = `${url}?${params.toString()}`;
-      console.log('실제 API 요청 URL:', url);
-      
-      // API 요청
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': authService.getAuthHeader(),
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+      // 여러 엔드포인트 시도
+      for (const endpoint of possibleEndpoints) {
+        try {
+          // 쿼리 파라미터 구성
+          const params = new URLSearchParams();
+          params.append('store_code', store_code);
+          
+          if (formattedStartDate) {
+            params.append('start_date', formattedStartDate);
+          }
+          
+          if (formattedEndDate) {
+            params.append('end_date', formattedEndDate);
+          }
+          
+          if (platform_code) {
+            params.append('platform_code', platform_code);
+          }
+          
+          if (platform) {
+            params.append('platform', platform);
+          }
+          
+          // 최종 URL 생성
+          const url = `${endpoint}?${params.toString()}`;
+          console.log('시도하는 API 요청 URL:', url);
+          
+          // API 요청
+          const response = await fetch(url, {
+            headers: {
+              'Authorization': authService.getAuthHeader(),
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.warn(`API 오류 응답 (${endpoint}):`, errorText);
+            continue; // 다음 엔드포인트 시도
+          }
+          
+          // 응답 텍스트를 먼저 획득
+          const responseText = await response.text();
+          
+          // 응답이 비어있는지 확인
+          if (!responseText.trim()) {
+            console.warn(`빈 응답 (${endpoint})`);
+            continue; // 다음 엔드포인트 시도
+          }
+          
+          // JSON 파싱 시도
+          try {
+            responseData = JSON.parse(responseText);
+            console.log('API 응답:', responseData);
+            break; // 성공하면 루프 종료
+          } catch (jsonError) {
+            console.warn(`JSON 파싱 오류 (${endpoint}):`, jsonError);
+            continue; // 다음 엔드포인트 시도
+          }
+        } catch (fetchError) {
+          console.warn(`Fetch 오류 (${endpoint}):`, fetchError);
+          error = fetchError;
         }
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API 오류 응답:', errorText);
-        throw new Error(`API 요청 실패: ${response.status} ${response.statusText}`);
       }
       
-      const responseData = await response.json();
-      console.log('API 응답:', responseData);
-      
-      // 데이터 구조 확인 및 대시보드 업데이트
+      // 모든 엔드포인트 시도 후 응답 확인
       if (responseData) {
         this.updateDashboard(responseData);
       } else {
-        console.error('API 응답에 데이터가 없습니다');
-        this.showAlert('리뷰 데이터를 불러오는데 실패했습니다', 'error');
+        console.error('API 응답을 얻을 수 없습니다. 모든 엔드포인트 시도 실패');
+        
+        // 테스트 데이터로 폴백
+        console.log('테스트 데이터 사용');
+        const mockData = this.generateMockData(store_code, platform_code);
+        this.updateDashboard(mockData);
+        this.showAlert('실시간 데이터를 불러오는데 실패하여 샘플 데이터를 표시합니다', 'warning');
       }
       
     } catch (error) {
       console.error('Stats loading error:', error);
-      // 테스트 데이터로 폴백 (실제 API 요청 실패 시)
+      // 테스트 데이터로 폴백
       console.log('API 요청 실패, 테스트 데이터 사용');
       
       const mockData = this.generateMockData(store_code, platform_code);
