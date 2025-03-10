@@ -832,41 +832,44 @@ async initializeStoreSelectFallback(userId) {
     async loadMoreReviewsFromServer() {
         // 이 메서드는 필요할 때 서버에서 추가 리뷰를 로드하기 위한 것입니다
         try {
-            // 추가 리뷰 로드를 위한 파라미터 생성
-            const params = this.buildReviewsRequestParams();
-            params.append('page', this.reviewsPage.toString());
-            params.append('limit', this.reviewsPerPage.toString());
-            
-            const url = `${CONFIG.API_BASE_URL}/reviews?${params.toString()}`;
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': authService.getAuthHeader(),
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (!response.ok) throw new Error('추가 리뷰 데이터 로드 실패');
-            
-            const data = await response.json();
-            
-            // 새 리뷰 병합
-            if (Array.isArray(data.reviews) && data.reviews.length > 0) {
-                this.allReviews = [...this.allReviews, ...data.reviews];
-                this.hasMoreServerData = data.reviews.length >= this.reviewsPerPage;
-            } else {
-                this.hasMoreServerData = false;
+          // 추가 리뷰 로드를 위한 파라미터 생성
+          const params = this.buildReviewsRequestParams();
+          params.append('page', this.reviewsPage.toString());
+          params.append('limit', this.reviewsPerPage.toString());
+          
+          // 수정된 부분: 올바른 API 엔드포인트 사용
+          const url = `${CONFIG.API_BASE_URL}/reviews?${params.toString()}`;
+          console.log('추가 리뷰 로드 URL:', url);
+          
+          const response = await fetch(url, {
+            headers: {
+              'Authorization': authService.getAuthHeader(),
+              'Content-Type': 'application/json'
             }
-            
-            // 업데이트된 리뷰 표시
-            this.filterAndDisplayReviews();
-            
+          });
+          
+          if (!response.ok) throw new Error('추가 리뷰 데이터 로드 실패');
+          
+          const data = await response.json();
+          
+          // 새 리뷰 병합
+          if (Array.isArray(data.reviews) && data.reviews.length > 0) {
+            this.allReviews = [...this.allReviews, ...data.reviews];
+            this.hasMoreServerData = data.reviews.length >= this.reviewsPerPage;
+          } else {
+            this.hasMoreServerData = false;
+          }
+          
+          // 업데이트된 리뷰 표시
+          this.filterAndDisplayReviews();
+          
         } catch (error) {
-            console.error('추가 리뷰 로드 오류:', error);
-            this.showAlert('추가 리뷰를 로드하는 중 오류가 발생했습니다.');
+          console.error('추가 리뷰 로드 오류:', error);
+          this.showAlert('추가 리뷰를 로드하는 중 오류가 발생했습니다.');
         } finally {
-            this.isLoadingMore = false;
+          this.isLoadingMore = false;
         }
-    }
+      }
     
     // dashboard.js의 buildReviewsRequestParams 함수 수정
     buildReviewsRequestParams() {
@@ -1302,8 +1305,9 @@ async loadStoresByDirectMethod(userId) {
       if (platform) params.append('platform', platform);
       if (platform_code) params.append('platform_code', platform_code);
       
-      // 통계 데이터 API 호출
-      const statsUrl = `${CONFIG.API_BASE_URL}/stats/details?${params.toString()}`;
+      // 수정된 부분: 올바른 API 엔드포인트 사용
+      // 'stats/details' 대신 'stats_detail' 사용
+      const statsUrl = `${CONFIG.API_BASE_URL}/stats_detail?${params.toString()}`;
       console.log('통계 API 요청 URL:', statsUrl);
       
       try {
