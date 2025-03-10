@@ -1,7 +1,7 @@
 // frontend/js/authService.js
 class AuthService {
   constructor() {
-    this.API_URL = '/.netlify/functions';
+    this.API_URL = '/api';  // 수정: /.netlify/functions에서 /api로 변경
     this.tokenRefreshTimeouts = new Set();
     this.rateLimitRetryDelay = 1000;
     this.maxRetries = 3;

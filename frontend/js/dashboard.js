@@ -23,6 +23,9 @@ export const utils = {
     }
 };
 
+console.log('[디버그] CONFIG 확인:', CONFIG);
+console.log('[디버그] API_BASE_URL:', CONFIG.API_BASE_URL);
+
 function safeLog(message) {
     console.log(message);
     // 함수가 존재하는 경우에만 호출
@@ -336,6 +339,7 @@ async initializeStoreSelect() {
       this.showAlert('매장 정보를 불러오는데 실패했습니다.', 'error');
       this.useTestStoreData();
     }
+    console.log('[디버그] 실제 API 요청 URL:', functionUrl);
   }
 
 // 매장 데이터 포맷팅 함수
