@@ -285,50 +285,48 @@ applyCalendarStyles() {
 
     
 async initializeStoreSelect() {
-  try {
-    console.log('매장 정보 초기화 시작...');
-    
-    const user = await authService.getCurrentUser();
-    if (!user?.id) {
-      console.error('사용자 정보를 가져올 수 없습니다');
-      this.showAlert('사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.', 'error');
-      setTimeout(() => window.location.href = '/login.html', 2000);
-      return;
-    }
-    
-    console.log('사용자 정보:', user);
-    
-    // API 호출 시도
     try {
-      const functionUrl = `${CONFIG.API_BASE_URL}/stores-user-platform`;
-      console.log('API 요청 URL:', functionUrl);
+      console.log('매장 정보 초기화 시작...');
       
-      const response = await fetch(functionUrl, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
+      // 먼저 인증 상태를 명시적으로 확인
+      if (!await authService.isAuthenticated()) {
+        console.error('인증되지 않음, 로그인 페이지로 이동');
+        window.location.href = '/login.html';
+        return;
+      }
       
-      console.log('API 응답 상태:', response.status);
+      // 인증 헤더 확인
+      const authHeader = authService.getAuthHeader();
+      console.log('사용할 인증 헤더:', authHeader ? '존재함' : '없음');
       
-      // 내용 출력
-      const responseText = await response.text();
-      console.log('API 응답 내용:', responseText);
-      
-      // 응답 형식에 따라 처리
-      let stores;
+      // API 호출 시도
       try {
-        stores = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('JSON 파싱 오류:', parseError);
-        throw new Error('응답을 JSON으로 파싱할 수 없습니다');
-      }
-      
-      if (!Array.isArray(stores)) {
-        console.error('매장 데이터가 배열이 아닙니다:', stores);
-        throw new Error('유효한 매장 데이터가 아닙니다');
-      }
+        const functionUrl = `${CONFIG.API_BASE_URL}/stores-user-platform`;
+        console.log('API 요청 URL:', functionUrl);
+        
+        const response = await fetch(functionUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': authHeader,
+            'Accept': 'application/json'
+          },
+          credentials: 'include'
+        });
+        
+        console.log('API 응답 상태:', response.status);
+        
+        // 내용 출력
+        const responseText = await response.text();
+        console.log('API 응답 내용:', responseText);
+        
+        // 응답 형식에 따라 처리
+        let stores;
+        try {
+          stores = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('JSON 파싱 오류:', parseError);
+          throw new Error('응답을 JSON으로 파싱할 수 없습니다');
+        }
       
       // 데이터 포맷팅 및 표시
       const formattedStores = stores.map(store => ({
@@ -377,34 +375,27 @@ formatStoreData(stores) {
 }
 
 // 테스트 데이터 사용 함수
+// dashboard.js의 매장 로드 함수에 추가
 useTestStoreData() {
-  console.log('테스트 매장 데이터 사용');
-  
-  const mockStores = [
-    {
-      store_code: 'STORE001',
-      platform: '배달의민족',
-      platform_code: '',
-      store_name: '테스트 매장 1'
-    },
-    {
-      store_code: 'STORE002',
-      platform: '요기요',
-      platform_code: 'YOG001',
-      store_name: '테스트 매장 2'
-    },
-    {
-      store_code: 'STORE003',
-      platform: '쿠팡이츠',
-      platform_code: 'CPE001',
-      store_name: '테스트 매장 3'
-    }
-  ];
-  
-  const formattedStores = this.formatStoreData(mockStores);
-  this.populateStoreSelectWithAllOption(formattedStores);
-  this.showAlert('API 서버 연결 실패, 테스트 데이터를 표시합니다.', 'warning');
-}
+    console.log('인증 오류로 인해 테스트 매장 데이터 사용');
+    
+    const mockStores = [
+      {
+        store_code: 'STORE001',
+        platform: '배달의민족',
+        store_name: '테스트 매장 1'
+      },
+      {
+        store_code: 'STORE002',
+        platform: '요기요',
+        platform_code: 'YOG001',
+        store_name: '테스트 매장 2'
+      }
+    ];
+    
+    this.populateStoreSelect(mockStores);
+    this.showAlert('API 서버 연결 실패, 테스트 데이터를 표시합니다.', 'warning');
+  }
 
       // 대체 URL을 사용하는 폴백 메서드
 async initializeStoreSelectFallback(userId) {
@@ -425,15 +416,15 @@ async initializeStoreSelectFallback(userId) {
       for (const endpoint of possibleEndpoints) {
         try {
           console.log(`API 엔드포인트 시도: ${endpoint}`);
-        // 이 부분에서 authService.getAuthHeader()가 올바른 토큰을 반환하는지 확인
-        const response = await fetch(`/.netlify/functions/stores-user-platform`, {
+          const response = await fetch(endpoint, {
             method: 'GET',
             headers: {
-            'Authorization': authService.getAuthHeader(),
-            'Accept': 'application/json'
-            }
-        });
-        
+              'Authorization': authService.getAuthHeader(),
+              'Accept': 'application/json'
+            },
+            credentials: 'include'
+          });
+          
           if (response.ok) {
             stores = await response.json();
             successUrl = endpoint;

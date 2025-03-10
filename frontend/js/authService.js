@@ -755,14 +755,28 @@ class AuthService {
         }
       }
 
-    getAuthHeader() {
+      getAuthHeader() {
         try {
           const session = this.getSession();
           console.log('getAuthHeader 호출됨, 세션:', session ? '존재함' : '없음');
           
           if (!session?.access_token) {
-            console.warn('토큰 없음 - 세션 데이터:', session);
-            return '';
+            console.warn('토큰 없음 - 새로운 토큰 획득 시도');
+            
+            // 세션이 없으면 토큰 갱신 시도
+            return this.refreshToken()
+              .then(newSession => {
+                if (newSession?.access_token) {
+                  console.log('토큰 갱신 성공');
+                  return `Bearer ${newSession.access_token}`;
+                }
+                console.warn('토큰 갱신 실패');
+                return '';
+              })
+              .catch(error => {
+                console.error('토큰 갱신 중 오류:', error);
+                return '';
+              });
           }
           
           console.log('토큰 마스킹:', session.access_token.substring(0, 10) + '...');

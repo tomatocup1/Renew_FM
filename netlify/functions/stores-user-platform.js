@@ -2,57 +2,73 @@
 const { createClient } = require('@supabase/supabase-js');
 
 exports.handler = async (event, context) => {
-  // CORS 헤더 설정
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Content-Type': 'application/json'
-  };
-
-  // OPTIONS 요청 처리
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers };
-  }
-
-  try {
-    // 인증 헤더 추출 및 디버깅 정보 출력
-    const authHeader = event.headers.authorization || '';
-    console.log('Received authorization header:', authHeader ? 'Present' : 'Missing');
-    
-    // Supabase 클라이언트 초기화
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_KEY
-    );
-    
-    // 인증 헤더가 없는 경우
-    if (!authHeader) {
-      console.log('No authorization header provided');
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: '인증이 필요합니다.' })
-      };
+    // CORS 헤더 설정
+    const headers = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Content-Type': 'application/json'
+    };
+  
+    // OPTIONS 요청 처리
+    if (event.httpMethod === 'OPTIONS') {
+      return { statusCode: 204, headers };
     }
-
-    // 토큰 추출
-    const token = authHeader.replace('Bearer ', '');
-    console.log('Token extracted, verifying with Supabase');
-    
-    // 사용자 정보 확인
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    
-    if (userError || !user) {
-      console.log('User validation failed:', userError?.message);
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: '유효하지 않은 인증 정보입니다.' })
-      };
-    }
-    
-    console.log('User authenticated successfully:', user.id);
+  
+    try {
+      // 모든 헤더 로깅
+      console.log('Received headers:', JSON.stringify(event.headers));
+      
+      // 인증 헤더 추출 및 처리를 강화
+      let authHeader = event.headers.authorization || event.headers.Authorization || '';
+      console.log('Authorization header:', authHeader.substring(0, 20) + '...');
+      
+      // Supabase 클라이언트 초기화
+      const supabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_KEY
+      );
+      
+      // 테스트 모드 추가 - 개발 중에만 활성화
+      const TEST_MODE = process.env.NODE_ENV === 'development';
+      let user;
+      
+      if (!authHeader && TEST_MODE) {
+        console.log('Test mode enabled - skipping auth');
+        // 테스트용 더미 사용자 데이터
+        user = { id: 'test-user-id' };
+      } else {
+        // 토큰 추출 및 검증
+        const token = authHeader.replace('Bearer ', '');
+        console.log('Token length:', token.length);
+        
+        if (!token) {
+          console.log('No token provided');
+          return {
+            statusCode: 401,
+            headers,
+            body: JSON.stringify({ error: '인증이 필요합니다.' })
+          };
+        }
+        
+        // 사용자 정보 확인
+        const { data, error } = await supabase.auth.getUser(token);
+        
+        if (error || !data.user) {
+          console.log('User validation failed:', error?.message);
+          return {
+            statusCode: 401,
+            headers,
+            body: JSON.stringify({ 
+              error: '유효하지 않은 인증 정보입니다.',
+              details: error?.message
+            })
+          };
+        }
+        
+        user = data.user;
+        console.log('User authenticated:', user.id);
+      }
     
     // 사용자 역할 조회
     const { data: userData, error: dbError } = await supabase
