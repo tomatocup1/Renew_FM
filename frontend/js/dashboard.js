@@ -357,23 +357,21 @@ async initializeStoreSelect() {
 
 // 매장 데이터 포맷팅 함수
 formatStoreData(stores) {
-  if (!Array.isArray(stores)) {
-    console.warn('매장 데이터가 배열이 아님:', stores);
-    return [];
+    if (!Array.isArray(stores)) {
+      console.warn('매장 데이터가 배열이 아님:', stores);
+      return [];
+    }
+    
+    return stores.map(store => ({
+      value: JSON.stringify({
+        store_code: store.store_code,
+        platform_code: store.platform_code || '',
+        platform: store.platform || '배달의민족'
+      }),
+      label: `[${store.platform || '배달의민족'}] ${store.store_name || store.store_code}${store.platform_code ? ` (${store.platform_code})` : ''}`,
+      store_code: store.store_code
+    }));
   }
-  
-  return stores.map(store => ({
-    value: JSON.stringify({
-      store_code: store.store_code,
-      platform_code: store.platform_code || '',
-      platform: store.platform || '배달의민족'
-    }),
-    label: store.platform_code ? 
-          `[${store.platform}] ${store.store_name} (${store.platform_code})` :
-          `[${store.platform || '배달의민족'}] ${store.store_name || store.store_code}`,
-    store_code: store.store_code
-  }));
-}
 
 // 테스트 데이터 사용 함수
 // dashboard.js의 매장 로드 함수에 추가
@@ -617,7 +615,16 @@ async initializeStoreSelectFallback(userId) {
                         startDate: selectedDates[0],
                         endDate: selectedDates[1]
                     };
-                    this.resetAndLoadData();
+                    
+                    // 데이터 리셋 및 리로드
+                    this.reviewsPage = 1;
+                    this.allReviews = [];
+                    
+                    // 매장이 선택된 경우에만 데이터 로드
+                    if (this.selectedStoreData) {
+                        console.log('날짜 변경으로 데이터 리로드');
+                        this.resetAndLoadData();
+                    }
                 }
             },
             onReady: () => {
@@ -858,6 +865,7 @@ async initializeStoreSelectFallback(userId) {
         }
     }
     
+    // dashboard.js의 buildReviewsRequestParams 함수 수정
     buildReviewsRequestParams() {
         // 공통 요청 파라미터 생성
         const params = new URLSearchParams();
@@ -877,6 +885,7 @@ async initializeStoreSelectFallback(userId) {
                 params.append('store_code', this.selectedStoreData.store_code);
             }
             
+            // platform_code 우선 사용 - 중요: 이 부분이 변경된 부분
             if (this.selectedStoreData.platform_code) {
                 params.append('platform_code', this.selectedStoreData.platform_code);
             }
@@ -950,9 +959,10 @@ async initializeStoreSelectFallback(userId) {
         } catch (error) {
             console.error('Store change error:', error);
             this.clearDashboard();
+            this.showAlert('매장 정보 처리 중 오류가 발생했습니다', 'error');
         }
     }
-
+    
     resetAndLoadData() {
         // 페이지 상태 초기화
         this.reviewsPage = 1;
@@ -1251,7 +1261,8 @@ async loadStoresByDirectMethod(userId) {
     }
   }
 
-  async loadStatsAndReviews({ startDate, endDate, store_code, platform_code, platform } = {}) {
+  // dashboard.js에서 loadStatsAndReviews 함수 수정
+async loadStatsAndReviews({ startDate, endDate, store_code, platform_code, platform } = {}) {
     try {
       // 로딩 표시기 표시
       this.showLoadingIndicator(true);
@@ -1262,131 +1273,186 @@ async loadStoresByDirectMethod(userId) {
         return;
       }
       
+      // 날짜 형식화
+      const formattedStartDate = this.formatDateForAPI(startDate);
+      const formattedEndDate = this.formatDateForAPI(endDate);
+      
       console.log('통계 데이터 로드 중 (필터):', { 
         store_code, 
         platform_code,
         platform,
-        startDate, 
-        endDate 
+        startDate: formattedStartDate, 
+        endDate: formattedEndDate 
       });
       
-      // API 함수가 없으므로 테스트 데이터 사용
-      console.log('API 함수가 존재하지 않아 테스트 데이터를 사용합니다');
+      // API 요청 URL 구성
+      let url = `${CONFIG.API_BASE_URL}/stats-details?store_code=${store_code}`;
       
-      // 현재 스토어 코드 기준으로 테스트 데이터 생성
-      const mockData = {
-        stats: [
-          {
-            review_date: "2025-03-01",
-            store_code: store_code,
-            total_reviews: 10,
-            rating_5_count: 5,
-            rating_4_count: 3,
-            rating_3_count: 1,
-            rating_2_count: 1,
-            rating_1_count: 0,
-            boss_reply_count: 2,
-            avg_rating: "4.2"
-          },
-          {
-            review_date: "2025-03-02",
-            store_code: store_code,
-            total_reviews: 8,
-            rating_5_count: 4,
-            rating_4_count: 2,
-            rating_3_count: 2,
-            rating_2_count: 0,
-            rating_1_count: 0,
-            boss_reply_count: 1,
-            avg_rating: "4.3"
-          },
-          {
-            review_date: "2025-03-03",
-            store_code: store_code,
-            total_reviews: 12,
-            rating_5_count: 6,
-            rating_4_count: 4,
-            rating_3_count: 1,
-            rating_2_count: 1,
-            rating_1_count: 0,
-            boss_reply_count: 3,
-            avg_rating: "4.25"
-          }
-        ],
-        reviews: [
-          {
-            id: 1,
-            store_code: store_code,
-            review_date: "2025-03-03",
-            created_at: "2025-03-03T15:30:00Z",
-            rating: 5,
-            review_name: "김고객",
-            review_content: "음식이 정말 맛있어요. 배달도 빨라서 좋았습니다.",
-            boss_reply_needed: true,
-            ai_response: "고객님, 소중한 리뷰 감사합니다. 항상 맛있는 음식으로 보답하겠습니다."
-          },
-          {
-            id: 2,
-            store_code: store_code,
-            review_date: "2025-03-03",
-            created_at: "2025-03-03T14:45:00Z",
-            rating: 4,
-            review_name: "이고객",
-            review_content: "전체적으로 만족스러웠어요. 다음에 또 주문할게요.",
-            boss_reply_needed: false,
-            ai_response: "소중한 평가 감사합니다. 더 맛있는 음식으로 찾아뵙겠습니다."
-          },
-          {
-            id: 3,
-            store_code: store_code,
-            review_date: "2025-03-02",
-            created_at: "2025-03-02T19:15:00Z",
-            rating: 3,
-            review_name: "박고객",
-            review_content: "음식은 괜찮았는데 배달이 좀 늦었어요.",
-            boss_reply_needed: true,
-            ai_response: "불편을 드려 죄송합니다. 배달 시간 개선을 위해 노력하겠습니다."
-          },
-          {
-            id: 4,
-            store_code: store_code,
-            review_date: "2025-03-02",
-            created_at: "2025-03-02T12:30:00Z",
-            rating: 5,
-            review_name: "최고객",
-            review_content: "항상 맛있게 먹고 있어요. 단골이 될게요!",
-            boss_reply_needed: false,
-            ai_response: "단골님의 소중한 말씀 감사합니다. 앞으로도 최선을 다하겠습니다."
-          },
-          {
-            id: 5,
-            store_code: store_code,
-            review_date: "2025-03-01",
-            created_at: "2025-03-01T20:10:00Z",
-            rating: 4,
-            review_name: "정고객",
-            review_content: "맛있게 잘 먹었습니다. 양이 조금 더 많았으면 좋겠어요.",
-            boss_reply_needed: true,
-            ai_response: "소중한 의견 감사합니다. 양 조절에 더 신경쓰도록 하겠습니다."
-          }
-        ],
-        meta: {
-          total_stats: 3,
-          total_reviews: 5,
-          needs_boss_reply: 3
+      if (formattedStartDate) {
+        url += `&start_date=${formattedStartDate}`;
+      }
+      
+      if (formattedEndDate) {
+        url += `&end_date=${formattedEndDate}`;
+      }
+      
+      if (platform_code) {
+        url += `&platform_code=${platform_code}`;
+      }
+      
+      if (platform) {
+        url += `&platform=${platform}`;
+      }
+      
+      // API 요청
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': authService.getAuthHeader(),
+          'Content-Type': 'application/json'
         }
-      };
+      });
       
-      // 테스트 데이터로 대시보드 업데이트
-      this.updateDashboard(mockData);
-      this.showLoadingIndicator(false);
+      if (!response.ok) {
+        throw new Error(`API 요청 실패: ${response.status} ${response.statusText}`);
+      }
+      
+      const responseData = await response.json();
+      console.log('API 응답:', responseData);
+      
+      // 데이터 구조 확인 및 대시보드 업데이트
+      if (responseData) {
+        this.updateDashboard(responseData);
+      } else {
+        console.error('API 응답에 데이터가 없습니다');
+        this.showAlert('리뷰 데이터를 불러오는데 실패했습니다', 'error');
+      }
       
     } catch (error) {
       console.error('Stats loading error:', error);
-      this.clearDashboard();
+      // 테스트 데이터로 폴백 (실제 API 요청 실패 시)
+      console.log('API 요청 실패, 테스트 데이터 사용');
+      
+      const mockData = this.generateMockData(store_code, platform_code);
+      this.updateDashboard(mockData);
+      this.showAlert('실시간 데이터를 불러오는데 실패하여 샘플 데이터를 표시합니다', 'warning');
+      
+    } finally {
       this.showLoadingIndicator(false);
-      this.showAlert('데이터를 불러오는 중 오류가 발생했습니다', 'error');
     }
+  }
+  
+  // 테스트 데이터 생성 함수 추가
+  generateMockData(store_code, platform_code) {
+    return {
+      stats: [
+        {
+          review_date: "2025-03-03",
+          store_code: store_code,
+          platform_code: platform_code || '',
+          total_reviews: 12,
+          rating_5_count: 6,
+          rating_4_count: 4,
+          rating_3_count: 1,
+          rating_2_count: 1,
+          rating_1_count: 0,
+          boss_reply_count: 3,
+          avg_rating: "4.25"
+        },
+        {
+          review_date: "2025-03-02",
+          store_code: store_code,
+          platform_code: platform_code || '',
+          total_reviews: 8,
+          rating_5_count: 4,
+          rating_4_count: 2,
+          rating_3_count: 2,
+          rating_2_count: 0,
+          rating_1_count: 0,
+          boss_reply_count: 1,
+          avg_rating: "4.3"
+        },
+        {
+          review_date: "2025-03-01",
+          store_code: store_code,
+          platform_code: platform_code || '',
+          total_reviews: 10,
+          rating_5_count: 5,
+          rating_4_count: 3,
+          rating_3_count: 1,
+          rating_2_count: 1,
+          rating_1_count: 0,
+          boss_reply_count: 2,
+          avg_rating: "4.2"
+        }
+      ],
+      reviews: [
+        {
+          id: 1,
+          store_code: store_code,
+          platform_code: platform_code || '',
+          review_date: "2025-03-03",
+          created_at: "2025-03-03T15:30:00Z",
+          rating: 5,
+          review_name: "김고객",
+          review_content: "음식이 정말 맛있어요. 배달도 빨라서 좋았습니다.",
+          boss_reply_needed: true,
+          ai_response: "고객님, 소중한 리뷰 감사합니다. 항상 맛있는 음식으로 보답하겠습니다."
+        },
+        {
+          id: 2,
+          store_code: store_code,
+          platform_code: platform_code || '',
+          review_date: "2025-03-03",
+          created_at: "2025-03-03T14:45:00Z",
+          rating: 4,
+          review_name: "이고객",
+          review_content: "전체적으로 만족스러웠어요. 다음에 또 주문할게요.",
+          boss_reply_needed: false,
+          ai_response: "소중한 평가 감사합니다. 더 맛있는 음식으로 찾아뵙겠습니다."
+        },
+        {
+          id: 3,
+          store_code: store_code,
+          platform_code: platform_code || '',
+          review_date: "2025-03-02",
+          created_at: "2025-03-02T19:15:00Z",
+          rating: 3,
+          review_name: "박고객",
+          review_content: "음식은 괜찮았는데 배달이 좀 늦었어요.",
+          boss_reply_needed: true,
+          ai_response: "불편을 드려 죄송합니다. 배달 시간 개선을 위해 노력하겠습니다."
+        },
+        {
+          id: 4,
+          store_code: store_code,
+          platform_code: platform_code || '',
+          review_date: "2025-03-02",
+          created_at: "2025-03-02T12:30:00Z",
+          rating: 5,
+          review_name: "최고객",
+          review_content: "항상 맛있게 먹고 있어요. 단골이 될게요!",
+          boss_reply_needed: false,
+          ai_response: "단골님의 소중한 말씀 감사합니다. 앞으로도 최선을 다하겠습니다."
+        },
+        {
+          id: 5,
+          store_code: store_code,
+          platform_code: platform_code || '',
+          review_date: "2025-03-01",
+          created_at: "2025-03-01T20:10:00Z",
+          rating: 4,
+          review_name: "정고객",
+          review_content: "맛있게 잘 먹었습니다. 양이 조금 더 많았으면 좋겠어요.",
+          boss_reply_needed: true,
+          ai_response: "소중한 의견 감사합니다. 양 조절에 더 신경쓰도록 하겠습니다."
+        }
+      ],
+      meta: {
+        total_stats: 3,
+        total_reviews: 5,
+        needs_boss_reply: 3
+      }
+    };
   }
 
     showAlert(message, type = 'info') {
