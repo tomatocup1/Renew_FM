@@ -37,7 +37,7 @@
   to = "/.netlify/functions/auth/:splat"
   status = 200
   force = true
-  
+
   [[redirects]]
   from = "/api/stats_detail*"
   to = "/.netlify/functions/stats-details:splat"
@@ -54,6 +54,43 @@
 [[redirects]]
   from = "/api/rules/:ruleId"
   to = "/.netlify/functions/rules-detail/:ruleId"
+  status = 200
+  force = true
+  
+[[redirects]]
+  from = "/api/stores-user-platform"
+  to = "/.netlify/functions/stores-user-platform"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/stores_user_platform"
+  to = "/.netlify/functions/stores-user-platform"
+  status = 200
+  force = true
+
+# 통계 API 경로 추가 - 다양한 표기법에 대응
+[[redirects]]
+  from = "/api/stats-details"
+  to = "/.netlify/functions/stats-details"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/stats_details"
+  to = "/.netlify/functions/stats-details"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/stats-detail"
+  to = "/.netlify/functions/stats-details"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/stats_detail"
+  to = "/.netlify/functions/stats-details"
   status = 200
   force = true
 

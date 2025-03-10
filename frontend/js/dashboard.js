@@ -297,45 +297,78 @@ async initializeStoreSelect() {
         return;
       }
       
-      // API 호출 시도
-      try {
-        const functionUrl = `${CONFIG.API_BASE_URL}/stores-user-platform`;
-        console.log('API 요청 URL:', functionUrl);
-        
-        const response = await fetch(functionUrl, {
-          method: 'GET',
-          headers: {
-            'Authorization': authService.getAuthHeader(),
-            'Accept': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        console.log('API 응답 상태:', response.status);
-        
-        const responseText = await response.text();
-        console.log('API 응답 내용:', responseText);
-        
-        // 응답 형식에 따라 처리
-        let stores;
-        try {
-          stores = JSON.parse(responseText);
-        } catch (parseError) {
-          console.error('JSON 파싱 오류:', parseError);
-          throw new Error('응답을 JSON으로 파싱할 수 없습니다');
-        }
+      // 여러 API 경로 시도 (하이픈/언더스코어 표기법 차이, 경로 변형 시도)
+      const apiPaths = [
+        '/api/stores-user-platform',      // 표준 API 경로 (netlify.toml 리다이렉트 사용)
+        '/api/stores_user_platform',      // 언더스코어 변형
+        `${CONFIG.API_BASE_URL}/stores-user-platform`,  // 직접 Netlify 함수 경로
+        `${CONFIG.API_BASE_URL}/stores_user_platform`   // 직접 Netlify 함수 경로 (언더스코어)
+      ];
       
-        // 데이터 포맷팅 및 표시
-        const formattedStores = this.formatStoreData(stores);
-        
-        console.log('포맷팅된 매장 목록:', formattedStores);
-        this.populateStoreSelectWithAllOption(formattedStores);
-        
-      } catch (apiError) {
-        console.error('API 호출 오류:', apiError);
-        // 테스트 데이터로 대체
-        this.useTestStoreData();
+      let responseData = null;
+      let successPath = '';
+      
+      // 모든 가능한 경로 시도
+      for (const apiPath of apiPaths) {
+        try {
+          console.log(`API 요청 시도: ${apiPath}`);
+          
+          const response = await fetch(apiPath, {
+            method: 'GET',
+            headers: {
+              'Authorization': authService.getAuthHeader(),
+              'Accept': 'application/json'
+            },
+            credentials: 'include'
+          });
+          
+          console.log(`${apiPath} 응답 상태:`, response.status);
+          
+          // 응답이 JSON인지 확인 (Content-Type 헤더 확인)
+          const contentType = response.headers.get('Content-Type') || '';
+          if (!contentType.includes('application/json')) {
+            console.warn(`${apiPath}에서 JSON이 아닌 응답 수신: ${contentType}`);
+            continue; // JSON이 아니면 다음 경로 시도
+          }
+          
+          if (!response.ok) {
+            console.warn(`${apiPath} 응답 실패:`, response.status);
+            continue; // 실패 시 다음 경로 시도
+          }
+          
+          responseData = await response.json();
+          successPath = apiPath;
+          console.log(`성공한 API 경로: ${apiPath}`);
+          break;
+        } catch (pathError) {
+          console.warn(`${apiPath} 요청 오류:`, pathError.message);
+        }
       }
+      
+      // 모든 API 경로 시도 실패 시 대체 방법 시도
+      if (!responseData) {
+        console.log('모든 API 경로 시도 실패, 유저 ID 기반 매장 정보 조회 시도');
+        
+        try {
+          const user = await authService.getCurrentUser();
+          if (user?.id) {
+            await this.initializeStoreSelectFallback(user.id);
+            return;
+          }
+        } catch (userError) {
+          console.error('사용자 정보 조회 실패:', userError);
+        }
+        
+        // 모든 시도 실패 시 테스트 데이터 사용
+        this.useTestStoreData();
+        return;
+      }
+      
+      // 데이터 포맷팅 및 표시
+      const formattedStores = this.formatStoreData(responseData);
+      console.log('포맷팅된 매장 목록:', formattedStores);
+      this.populateStoreSelectWithAllOption(formattedStores);
+      
     } catch (error) {
       console.error('매장 목록 초기화 중 오류:', error);
       this.showAlert('매장 정보를 불러오는데 실패했습니다.', 'error');
@@ -1305,53 +1338,27 @@ async loadStoresByDirectMethod(userId) {
       if (platform) params.append('platform', platform);
       if (platform_code) params.append('platform_code', platform_code);
       
-      // 수정된 부분: 올바른 API 엔드포인트 사용 (파일명과 일치시킴)
-      // 'stats_detail' 대신 'stats-details' 사용 (하이픈 사용, s 추가)
-      const statsUrl = `${CONFIG.API_BASE_URL}/stats-details?${params.toString()}`;
-      console.log('통계 API 요청 URL:', statsUrl);
+      // 여러 API 경로 변형으로 시도 (하이픈/언더스코어 표기법, 경로 변형)
+      const apiPaths = [
+        `/api/stats-details?${params.toString()}`,           // 표준 API 경로 (netlify.toml 리다이렉트)
+        `/api/stats_details?${params.toString()}`,           // 언더스코어 변형
+        `/api/stats_detail?${params.toString()}`,            // 단수형 변형
+        `/api/stats-detail?${params.toString()}`,            // 단수형 하이픈 변형
+        `${CONFIG.API_BASE_URL}/stats-details?${params.toString()}`,  // 직접 Netlify 함수 경로
+        `${CONFIG.API_BASE_URL}/stats_details?${params.toString()}`,  // 직접 Netlify 함수 경로 (언더스코어)
+        `${CONFIG.API_BASE_URL}/stats-detail?${params.toString()}`,   // 단수형
+        `${CONFIG.API_BASE_URL}/stats_detail?${params.toString()}`    // 단수형 언더스코어
+      ];
       
-      try {
-        const statsResponse = await fetch(statsUrl, {
-          method: 'GET',
-          headers: {
-            'Authorization': authService.getAuthHeader(),
-            'Accept': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        if (!statsResponse.ok) {
-          console.error('통계 데이터 API 오류:', statsResponse.status);
-          throw new Error(`통계 데이터를 불러오는데 실패했습니다. (${statsResponse.status})`);
-        }
-        
-        const data = await statsResponse.json();
-        console.log('API 응답 데이터:', data);
-        
-        // 데이터 유효성 검사
-        if (!data || (!data.stats && !data.reviews)) {
-          console.warn('API에서 유효한 데이터를 반환하지 않았습니다.');
-          throw new Error('유효한 데이터가 없습니다');
-        }
-        
-        // 응답 데이터로 대시보드 업데이트
-        this.updateDashboard(data);
-        
-      } catch (apiError) {
-        console.error('API 호출 오류:', apiError);
-        
-        // API 호출 실패시 최대 1번 재시도 (다른 이름 시도)
+      let responseData = null;
+      let successPath = '';
+      
+      // 모든 가능한 경로 시도
+      for (const apiPath of apiPaths) {
         try {
-          console.log('API 호출 재시도 중... (대체 경로 시도)');
+          console.log(`통계 API 요청 시도: ${apiPath}`);
           
-          // 토큰 갱신 시도
-          await authService.refreshToken();
-          
-          // 첫 번째 시도가 실패하면 다른 형식의 경로로 시도 (언더스코어 사용)
-          const fallbackUrl = `${CONFIG.API_BASE_URL}/stats_details?${params.toString()}`;
-          console.log('대체 URL 시도:', fallbackUrl);
-          
-          const retryResponse = await fetch(fallbackUrl, {
+          const response = await fetch(apiPath, {
             method: 'GET',
             headers: {
               'Authorization': authService.getAuthHeader(),
@@ -1360,30 +1367,53 @@ async loadStoresByDirectMethod(userId) {
             credentials: 'include'
           });
           
-          if (!retryResponse.ok) {
-            throw new Error(`재시도 실패 (${retryResponse.status})`);
+          console.log(`${apiPath} 응답 상태:`, response.status);
+          
+          // 응답이 JSON인지 확인
+          const contentType = response.headers.get('Content-Type') || '';
+          if (!contentType.includes('application/json')) {
+            console.warn(`${apiPath}에서 JSON이 아닌 응답 수신: ${contentType}`);
+            continue; // JSON이 아니면 다음 경로 시도
           }
           
-          const retryData = await retryResponse.json();
-          console.log('재시도 API 응답 데이터:', retryData);
+          if (!response.ok) {
+            console.warn(`${apiPath} 응답 실패:`, response.status);
+            continue; // 실패 시 다음 경로 시도
+          }
           
-          this.updateDashboard(retryData);
-          return;
-        } catch (retryError) {
-          console.error('API 재시도 실패:', retryError);
-          // 테스트 데이터로 폴백 (기존 코드 활용)
-          console.log('API 호출 실패로 인한 테스트 데이터 사용');
-          const mockData = this.generateMockDataWithDates(
-            store_code, 
-            platform_code, 
-            new Date(startDate), 
-            new Date(endDate)
-          );
-          this.updateDashboard(mockData);
-          this.showAlert('서버 연결에 실패하여 테스트 데이터를 표시합니다.', 'warning');
+          responseData = await response.json();
+          successPath = apiPath;
+          console.log(`성공한 통계 API 경로: ${apiPath}`);
+          break;
+        } catch (pathError) {
+          console.warn(`${apiPath} 요청 오류:`, pathError.message);
         }
       }
       
+      // 데이터를 성공적으로 가져왔으면 대시보드 업데이트
+      if (responseData) {
+        console.log('API 응답 데이터:', responseData);
+        
+        // 데이터 유효성 검사
+        if (!responseData.stats && !responseData.reviews) {
+          console.warn('API에서 유효한 데이터를 반환하지 않았습니다.');
+          throw new Error('유효한 데이터가 없습니다');
+        }
+        
+        // 응답 데이터로 대시보드 업데이트
+        this.updateDashboard(responseData);
+      } else {
+        // 모든 API 경로 시도 실패 시 테스트 데이터 사용
+        console.log('모든 API 경로 시도 실패, 테스트 데이터 사용');
+        const mockData = this.generateMockDataWithDates(
+          store_code, 
+          platform_code, 
+          new Date(startDate), 
+          new Date(endDate)
+        );
+        this.updateDashboard(mockData);
+        this.showAlert('서버 연결에 실패하여 테스트 데이터를 표시합니다.', 'warning');
+      }
     } catch (error) {
       console.error('통계 데이터 로드 중 예외 발생:', error);
       // 테스트 데이터로 폴백
