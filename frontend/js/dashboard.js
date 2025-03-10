@@ -425,15 +425,15 @@ async initializeStoreSelectFallback(userId) {
       for (const endpoint of possibleEndpoints) {
         try {
           console.log(`API 엔드포인트 시도: ${endpoint}`);
-          const response = await fetch(endpoint, {
+        // 이 부분에서 authService.getAuthHeader()가 올바른 토큰을 반환하는지 확인
+        const response = await fetch(`/.netlify/functions/stores-user-platform`, {
             method: 'GET',
             headers: {
-              'Authorization': authService.getAuthHeader(),
-              'Accept': 'application/json'
-            },
-            credentials: 'include'
-          });
-          
+            'Authorization': authService.getAuthHeader(),
+            'Accept': 'application/json'
+            }
+        });
+        
           if (response.ok) {
             stores = await response.json();
             successUrl = endpoint;
