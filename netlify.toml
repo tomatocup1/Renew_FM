@@ -107,6 +107,38 @@
   status = 200
   force = true
 
+  [[redirects]]
+  from = "/api/signin"
+  to = "/.netlify/functions/signin"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/login"
+  to = "/.netlify/functions/signin"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/auth/signin"
+  to = "/.netlify/functions/signin"
+  status = 200
+  force = true
+
+# 사용자 정보 관련 리다이렉트
+[[redirects]]
+  from = "/api/auth/user"
+  to = "/.netlify/functions/auth-user"
+  status = 200
+  force = true
+
+# 세션 갱신 관련 리다이렉트
+[[redirects]]
+  from = "/api/refresh-token"
+  to = "/.netlify/functions/refresh-token"
+  status = 200
+  force = true
+
 # 운영자가 특정 사용자의 매장을 조회하는 라우트
 [[redirects]]
   from = "/api/admin/users/:userId/stores"

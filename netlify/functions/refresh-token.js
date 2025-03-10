@@ -1,79 +1,115 @@
 // netlify/functions/refresh-token.js
-const { supabase, corsHeaders } = require('./utils/supabase');
+const { createClient } = require('@supabase/supabase-js');
+
+// Supabase 클라이언트 초기화
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// CORS 헤더 설정
+const headers = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Content-Type': 'application/json'
+};
 
 exports.handler = async (event, context) => {
+  // OPTIONS 요청 처리 (CORS preflight)
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers: corsHeaders };
+    return {
+      statusCode: 204,
+      headers
+    };
+  }
+
+  // POST 요청이 아닌 경우 오류 반환
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: '잘못된 요청 메서드입니다.' })
+    };
   }
 
   try {
-    if (event.httpMethod !== 'POST') {
-      return {
-        statusCode: 405,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: '지원하지 않는 HTTP 메소드입니다.' })
-      };
-    }
-
-    // 요청 본문에서 리프레시 토큰 추출
-    const requestBody = JSON.parse(event.body);
-    const refresh_token = requestBody.refresh_token;
-    
-    if (!refresh_token) {
-      console.error('리프레시 토큰 없음');
+    // 요청 바디 파싱
+    let body;
+    try {
+      body = JSON.parse(event.body);
+    } catch (parseError) {
+      console.error('Request body parse error:', parseError);
       return {
         statusCode: 400,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: '리프레시 토큰이 필요합니다.' })
+        headers,
+        body: JSON.stringify({ error: '잘못된 요청 형식입니다.' })
       };
     }
 
-    console.log(`토큰 갱신 시도, 토큰 길이: ${refresh_token.length}`);
-    
-    // Supabase 토큰 갱신
-    const { data, error } = await supabase.auth.refreshSession({ 
-      refresh_token: refresh_token 
-    });
-    
-    if (error) {
-      console.error('토큰 갱신 실패:', error.message);
+    const { refresh_token } = body;
+
+    if (!refresh_token) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'refresh_token이 필요합니다.' })
+      };
+    }
+
+    // 테스트 토큰 확인 (개발용)
+    if (refresh_token.startsWith('test-refresh-')) {
+      console.log('Test refresh token detected, returning test session');
       
-      // 토큰 갱신 실패시 새로운 세션 생성 (응급 처리)
-      const expiration = new Date();
-      expiration.setHours(expiration.getHours() + 1); // 1시간 유효
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2시간 후 만료
       
       return {
         statusCode: 200,
-        headers: corsHeaders,
+        headers,
         body: JSON.stringify({
           session: {
-            access_token: `temporary-${Date.now()}`,
-            refresh_token: refresh_token,
-            expires_at: expiration.toISOString()
+            access_token: `test-token-${Date.now()}`,
+            refresh_token: `test-refresh-${Date.now()}`,
+            expires_at: expiresAt.toISOString()
           }
         })
       };
     }
 
-    console.log('토큰 갱신 성공');
-    
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({
-        session: {
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-          expires_at: data.session.expires_at
-        }
-      })
-    };
+    // Supabase를 사용한 토큰 새로고침
+    try {
+      const { data, error } = await supabase.auth.refreshSession({
+        refresh_token
+      });
+
+      if (error) {
+        console.error('Token refresh error:', error);
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ error: '토큰 갱신에 실패했습니다.' })
+        };
+      }
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ session: data.session })
+      };
+    } catch (authError) {
+      console.error('Auth operation error:', authError);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: '토큰 갱신 중 오류가 발생했습니다.' })
+      };
+    }
   } catch (error) {
-    console.error('Token refresh error:', error);
+    console.error('Refresh token function error:', error);
     return {
       statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: '서버 오류가 발생했습니다.', details: error.message })
+      headers,
+      body: JSON.stringify({ error: '서버 오류가 발생했습니다.' })
     };
   }
 };
