@@ -1,7 +1,7 @@
 // frontend/js/authService.js
 class AuthService {
   constructor() {
-    this.API_URL = '/api';  // 수정: /.netlify/functions에서 /api로 변경
+    this.API_URL = '/.netlify/functions';
     this.tokenRefreshTimeouts = new Set();
     this.rateLimitRetryDelay = 1000;
     this.maxRetries = 3;
@@ -71,7 +71,7 @@ class AuthService {
       try {
         console.log('로그인 API 호출 시작:', email);
         
-        const response = await this.fetchWithRetry(`${this.API_URL}/auth/signin`, {
+        const response = await this.fetchWithRetry(`${this.API_URL}/signin`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -303,21 +303,21 @@ class AuthService {
         console.log('토큰 갱신 시도, refresh_token 존재함');
         
         // 요청 URL 로깅 추가
-        const refreshUrl = `${this.API_URL}/auth/refresh-token`;
-      console.log('요청 URL:', refreshUrl);
-      
-      try {
-        const response = await fetch(refreshUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            refresh_token: session.refresh_token
-          })
-        });
+        const refreshUrl = `${this.API_URL}/refresh-token`; // Netlify Functions 경로
+        console.log('요청 URL:', refreshUrl);
+        
+        try {
+          const response = await fetch(refreshUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              refresh_token: session.refresh_token
+            })
+          });
     
           console.log('토큰 갱신 응답 상태:', response.status);
           

@@ -1,6 +1,6 @@
 // frontend/js/config.js
 export const CONFIG = {
-  API_BASE_URL: "/api",
+  API_BASE_URL: "/.netlify/functions",
   DEFAULT_DATE_RANGE: 7,
   CHART_COLORS: {
       rating5: '#4CAF50',

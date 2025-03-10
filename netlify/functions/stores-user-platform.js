@@ -48,26 +48,20 @@ exports.handler = async (event, context) => {
     // Supabase에서 사용자 역할 조회 시도
     let userRole = '일반사용자';
     try {
-    // 임시 토큰인 경우 테스트 운영자 역할 부여 (개발 목적)
-    if (authHeader.includes('temp-access-token') || authHeader.includes('temporary-')) {
-        console.log('임시 토큰으로 운영자 권한 부여 (개발용)');
-        userRole = '운영자';
-    } else {
-        const { data: userData, error: userError } = await supabase
+      const { data: userData, error: userError } = await supabase
         .from('users')
         .select('role')
         .eq('id', userId)
         .single();
-        
-        if (!userError && userData) {
+      
+      if (!userError && userData) {
         userRole = userData.role;
         console.log('사용자 역할:', userRole);
-        } else {
+      } else {
         console.log('사용자 역할 조회 실패, 기본 역할 사용');
-        }
-    }
+      }
     } catch (roleError) {
-    console.log('역할 조회 중 오류:', roleError.message);
+      console.log('역할 조회 중 오류:', roleError.message);
     }
     
     // 실제 매장 데이터 조회
