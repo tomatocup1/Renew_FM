@@ -305,11 +305,13 @@ async initializeStoreSelect() {
 
     // 간소화된 API 경로 - 단일 엔드포인트 사용
     // 수정: 서버 URL 경로에 맞게 API 엔드포인트 수정
-    const apiEndpoint = '/api/stores-user-platform';
+    const apiEndpoint = '/api/stores_user_platform';
     
     try {
       console.log(`API 요청 시작: ${apiEndpoint}`);
       
+      console.log('인증 헤더:', authService.getAuthHeader());
+
       const response = await fetch(apiEndpoint, {
         method: 'GET',
         headers: {
@@ -321,19 +323,25 @@ async initializeStoreSelect() {
       });
       
       console.log(`API 응답 상태:`, response.status);
-      
-      // 응답이 JSON인지 확인
-      const contentType = response.headers.get('Content-Type') || '';
-      if (!contentType.includes('application/json')) {
-        console.warn(`${apiEndpoint}에서 JSON이 아닌 응답 수신: ${contentType}`);
-        throw new Error('API 응답이 JSON 형식이 아닙니다');
-      }
+      console.log('응답 헤더:', [...response.headers.entries()]);
       
       if (!response.ok) {
         throw new Error(`API 요청 실패: ${response.status}`);
       }
-      
-      const responseData = await response.json();
+
+      // 응답 본문을 텍스트로 먼저 로그
+      const responseText = await response.text();
+      console.log('응답 본문(텍스트):', responseText);
+
+      // JSON 파싱 시도
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+        console.log('파싱된 JSON 데이터:', responseData);
+      } catch (parseError) {
+        console.error('JSON 파싱 오류:', parseError);
+        throw new Error('API 응답이 JSON 형식이 아닙니다');
+      }
       
       if (!Array.isArray(responseData)) {
         console.warn('API 응답이 배열이 아님:', typeof responseData);
@@ -1381,7 +1389,7 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
       if (platform_code) params.append('platform_code', platform_code);
       
       // 수정: 단일 API 경로 사용
-      const apiPath = `/api/stats-details`;
+      const apiPath = `/api/stats_details`;
       
       try {
         console.log(`통계 API 요청: ${apiPath}?${params.toString()}`);
