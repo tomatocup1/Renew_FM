@@ -1,4 +1,6 @@
 // netlify/functions/stats-details.js
+const { createClient } = require('@supabase/supabase-js');
+
 exports.handler = async (event, context) => {
   // CORS 헤더 설정
   const headers = {
@@ -13,207 +15,147 @@ exports.handler = async (event, context) => {
     return { statusCode: 200, headers };
   }
 
+  if (event.httpMethod !== 'GET') {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: '지원하지 않는 HTTP 메소드입니다.' })
+    };
+  }
+
   try {
-    console.log('stats-details 함수 호출됨');
+    // 인증 토큰 추출
+    const authHeader = event.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
     
-    // 테스트 데이터 생성
-    const mockData = {
-      stats: [
-        {
-          review_date: "2025-03-01",
-          store_code: "STORE001",
-          total_reviews: 10,
-          rating_5_count: 5,
-          rating_4_count: 3,
-          rating_3_count: 1,
-          rating_2_count: 1,
-          rating_1_count: 0,
-          boss_reply_count: 2,
-          avg_rating: "4.2"
-        },
-        {
-          review_date: "2025-03-02",
-          store_code: "STORE001",
-          total_reviews: 8,
-          rating_5_count: 4,
-          rating_4_count: 2,
-          rating_3_count: 2,
-          rating_2_count: 0,
-          rating_1_count: 0,
-          boss_reply_count: 1,
-          avg_rating: "4.3"
-        },
-        {
-          review_date: "2025-03-03",
-          store_code: "STORE001",
-          total_reviews: 12,
-          rating_5_count: 6,
-          rating_4_count: 4,
-          rating_3_count: 1,
-          rating_2_count: 1,
-          rating_1_count: 0,
-          boss_reply_count: 3,
-          avg_rating: "4.25"
-        }
-      ],
-      reviews: [
-        {
-          id: 1,
-          store_code: "STORE001",
-          review_date: "2025-03-03",
-          created_at: "2025-03-03T15:30:00Z",
-          rating: 5,
-          review_name: "김고객",
-          review_content: "음식이 정말 맛있어요. 배달도 빨라서 좋았습니다.",
-          boss_reply_needed: true,
-          ai_response: "고객님, 소중한 리뷰 감사합니다. 항상 맛있는 음식으로 보답하겠습니다."
-        },
-        {
-          id: 2,
-          store_code: "STORE001",
-          review_date: "2025-03-03",
-          created_at: "2025-03-03T14:45:00Z",
-          rating: 4,
-          review_name: "이고객",
-          review_content: "전체적으로 만족스러웠어요. 다음에 또 주문할게요.",
-          boss_reply_needed: false,
-          ai_response: "소중한 평가 감사합니다. 더 맛있는 음식으로 찾아뵙겠습니다."
-        },
-        {
-          id: 3,
-          store_code: "STORE001",
-          review_date: "2025-03-02",
-          created_at: "2025-03-02T19:15:00Z",
-          rating: 3,
-          review_name: "박고객",
-          review_content: "음식은 괜찮았는데 배달이 좀 늦었어요.",
-          boss_reply_needed: true,
-          ai_response: "불편을 드려 죄송합니다. 배달 시간 개선을 위해 노력하겠습니다."
-        },
-        {
-          id: 4,
-          store_code: "STORE001",
-          review_date: "2025-03-02",
-          created_at: "2025-03-02T12:30:00Z",
-          rating: 5,
-          review_name: "최고객",
-          review_content: "항상 맛있게 먹고 있어요. 단골이 될게요!",
-          boss_reply_needed: false,
-          ai_response: "단골님의 소중한 말씀 감사합니다. 앞으로도 최선을 다하겠습니다."
-        },
-        {
-          id: 5,
-          store_code: "STORE001",
-          review_date: "2025-03-01",
-          created_at: "2025-03-01T20:10:00Z",
-          rating: 4,
-          review_name: "정고객",
-          review_content: "맛있게 잘 먹었습니다. 양이 조금 더 많았으면 좋겠어요.",
-          boss_reply_needed: true,
-          ai_response: "소중한 의견 감사합니다. 양 조절에 더 신경쓰도록 하겠습니다."
-        }
-      ],
-      meta: {
-        total_stats: 3,
-        total_reviews: 5,
-        needs_boss_reply: 3
-      }
-    };
-
-    // 환경 변수 확인
-    const hasSupabaseConfig = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY;
-    console.log('Supabase 설정 존재 여부:', hasSupabaseConfig);
+    // Supabase 클라이언트 초기화
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_KEY
+    );
     
-    // Supabase 설정이 없거나 오류 발생 시 테스트 데이터 반환
-    if (!hasSupabaseConfig) {
-      console.log('Supabase 설정 없음, 테스트 데이터 반환');
+    // 사용자 정보 확인
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
       return {
-        statusCode: 200,
+        statusCode: 401,
         headers,
-        body: JSON.stringify(mockData)
+        body: JSON.stringify({ error: '인증에 실패했습니다' })
       };
     }
-
-    // 쿼리 파라미터 추출
-    const { store_code } = event.queryStringParameters || {};
     
-    // 매장 코드가 없으면 오류
+    // 쿼리 파라미터 파싱
+    const {
+      store_code,
+      platform_code,
+      platform,
+      start_date,
+      end_date,
+      limit = '20' // 기본값
+    } = event.queryStringParameters || {};
+
     if (!store_code) {
-      console.log('매장 코드 누락, 테스트 데이터 반환');
       return {
-        statusCode: 200,
+        statusCode: 400,
         headers,
-        body: JSON.stringify(mockData)
+        body: JSON.stringify({ error: '매장 코드가 필요합니다.' })
       };
     }
 
-    try {
-      const { createClient } = require('@supabase/supabase-js');
+    // 통계 데이터 조회
+    let statsQuery = supabase
+      .from('review_stats')
+      .select('*')
+      .eq('store_code', store_code);
       
-      // Supabase 클라이언트 초기화
-      const supabase = createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_KEY
-      );
-
-      // 테스트에서는 항상 성공 반환
+    // 리뷰 데이터 조회
+    let reviewsQuery = supabase
+      .from('reviews')
+      .select('*')
+      .eq('store_code', store_code)
+      .order('review_date', { ascending: false })
+      .limit(parseInt(limit));
+    
+    // 필터 적용
+    if (platform_code) {
+      statsQuery = statsQuery.eq('platform_code', platform_code);
+      reviewsQuery = reviewsQuery.eq('platform_code', platform_code);
+    }
+    
+    if (platform) {
+      statsQuery = statsQuery.eq('platform', platform);
+      reviewsQuery = reviewsQuery.eq('platform', platform);
+    }
+    
+    if (start_date) {
+      statsQuery = statsQuery.gte('review_date', start_date);
+      reviewsQuery = reviewsQuery.gte('review_date', start_date);
+    }
+    
+    if (end_date) {
+      statsQuery = statsQuery.lte('review_date', end_date);
+      reviewsQuery = reviewsQuery.lte('review_date', end_date);
+    }
+    
+    // 정렬
+    statsQuery = statsQuery.order('review_date', { ascending: false });
+    
+    // 병렬 쿼리 실행
+    const [statsResult, reviewsResult] = await Promise.all([
+      statsQuery,
+      reviewsQuery
+    ]);
+    
+    // 에러 처리
+    if (statsResult.error) {
+      console.error('통계 데이터 조회 오류:', statsResult.error);
       return {
-        statusCode: 200,
+        statusCode: 500,
         headers,
-        body: JSON.stringify(mockData)
-      };
-
-    } catch (supabaseError) {
-      console.error('Supabase 오류:', supabaseError);
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify(mockData)
+        body: JSON.stringify({ error: '통계 데이터를 가져올 수 없습니다: ' + statsResult.error.message })
       };
     }
-  } catch (error) {
-    console.error('일반 오류:', error);
     
-    // 어떤 오류가 발생하더라도 테스트 데이터 반환
-    const fallbackData = {
-      stats: [
-        {
-          review_date: "2025-03-01",
-          store_code: "STORE001",
-          total_reviews: 5,
-          rating_5_count: 3,
-          rating_4_count: 2,
-          rating_3_count: 0,
-          rating_2_count: 0,
-          rating_1_count: 0,
-          boss_reply_count: 1,
-          avg_rating: "4.6"
-        }
-      ],
-      reviews: [
-        {
-          id: 1,
-          store_code: "STORE001",
-          review_date: "2025-03-01",
-          created_at: "2025-03-01T12:00:00Z",
-          rating: 5,
-          review_name: "테스트 고객",
-          review_content: "오류 복구 데이터입니다.",
-          boss_reply_needed: true,
-          ai_response: "테스트 응답입니다."
-        }
-      ],
-      meta: {
-        total_stats: 1,
-        total_reviews: 1,
-        needs_boss_reply: 1
-      }
-    };
+    if (reviewsResult.error) {
+      console.error('리뷰 데이터 조회 오류:', reviewsResult.error);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: '리뷰 데이터를 가져올 수 없습니다: ' + reviewsResult.error.message })
+      };
+    }
+    
+    // 응답 구성
+    const stats = statsResult.data || [];
+    const reviews = reviewsResult.data || [];
+    
+    // 확인이 필요한 리뷰 수 계산
+    const needsBossReply = reviews.filter(review => review.boss_reply_needed).length;
     
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify(fallbackData)
+      body: JSON.stringify({
+        stats,
+        reviews,
+        meta: {
+          total_stats: stats.length,
+          total_reviews: reviews.length,
+          needs_boss_reply: needsBossReply
+        }
+      })
+    };
+    
+  } catch (error) {
+    console.error('함수 실행 오류:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        error: '서버 오류가 발생했습니다',
+        message: error.message 
+      })
     };
   }
 };
