@@ -41,23 +41,27 @@ function safeDebugMessage(message) {
   }
 
 class DashboardManager {
-    constructor() {
-        console.log('DashboardManager initialized');
-        this.chartManager = new ChartManager();
-        this.currentFilter = null;
-        this.allReviews = [];
-        this.reviewsPage = 1;
-        this.reviewsPerPage = 20;
-        this.hasMoreReviews = false;
-        this.isLoadingMore = false;
-        this.isUpdating = false;
-        this.initAttempts = 0;
-        this.maxAttempts = 3;
-        this.selectedStoreData = null;
-        this.selectedDateRange = null;
-        window.dashboardManager = this;
-        this.init();
-    }
+  constructor() {
+    console.log('DashboardManager initialized');
+    this.chartManager = new ChartManager();
+    this.currentFilter = null;
+    this.allReviews = [];
+    this.reviewsPage = 1;
+    this.reviewsPerPage = 20;
+    this.hasMoreReviews = false;
+    this.isLoadingMore = false;
+    this.isUpdating = false;
+    this.initAttempts = 0;
+    this.maxAttempts = 3;
+    this.selectedStoreData = null;
+    this.selectedDateRange = null;
+    
+    // API 경로 캐싱 추가
+    this.successfulApiPath = null;
+    
+    window.dashboardManager = this;
+    this.init();
+  }
 
 // 캘린더 스타일 개선을 위한 새로운 메서드
 applyCalendarStyles() {
@@ -1393,97 +1397,59 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
       if (platform) params.append('platform', platform);
       if (platform_code) params.append('platform_code', platform_code);
       
-      // API 경로 - 절대 경로 사용
-      const apiPath = `${window.location.origin}/.netlify/functions/stats-details`;
+      // 파라미터 문자열
+      const queryString = params.toString();
       
-      try {
-        console.log(`통계 API 요청: ${apiPath}?${params.toString()}`);
-        
-        const response = await fetch(`${apiPath}?${params.toString()}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': authService.getAuthHeader(),
-            'Accept': 'application/json'
-          },
-          credentials: 'include'
-        });
-        
-        console.log(`API 응답 상태:`, response.status);
-        
-        // 인증 오류 처리
-        if (response.status === 401) {
-          console.log('인증 오류, 토큰 갱신 시도');
-          const newSession = await authService.refreshToken();
-          
-          if (newSession) {
-            // 토큰 갱신 성공 - 요청 재시도
-            console.log('토큰 갱신 성공, 요청 재시도');
-            return this.loadStatsAndReviews({ 
-              startDate, endDate, store_code, platform_code, platform 
-            });
-          } else {
-            // 토큰 갱신 실패 - 로그인 페이지로 이동
-            console.error('토큰 갱신 실패, 로그인 페이지로 이동');
-            window.location.href = '/login.html';
-            return;
-          }
-        }
-        
-        if (!response.ok) {
-          throw new Error(`API 요청 실패: ${response.status}`);
-        }
-  
-        // 응답이 HTML인지 확인 (응답 타입 체크)
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('text/html')) {
-          console.error('API가 HTML 응답을 반환했습니다. JSON이 예상됩니다.');
-          throw new Error('API가 잘못된 응답 형식을 반환했습니다.');
-        }
-        
-        // 텍스트로 먼저 받아 확인
-        const responseText = await response.text();
-        
-        // HTML 응답 여부 확인 (시작 부분에 <!DOCTYPE 또는 <html이 있는지)
-        if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
-          console.error('API가 HTML 응답을 반환했습니다:');
-          console.error(responseText.substring(0, 200) + '...'); // 처음 200자만 로그
-          throw new Error('API가 HTML 응답을 반환했습니다. 서버 구성을 확인하세요.');
-        }
-        
-        // 빈 응답인지 확인
-        if (!responseText.trim()) {
-          console.error('API가 빈 응답을 반환했습니다.');
-          throw new Error('API가 빈 응답을 반환했습니다.');
-        }
-        
-        // JSON으로 파싱 시도
-        let responseData;
+      // 성공한 API 경로가 있으면 해당 경로를 먼저 시도
+      if (this.successfulApiPath) {
         try {
-          responseData = JSON.parse(responseText);
-        } catch (parseError) {
-          console.error('JSON 파싱 실패:', parseError);
-          console.error('받은 응답:', responseText.substring(0, 200) + '...');
-          throw new Error('API 응답을 JSON으로 파싱할 수 없습니다.');
+          console.log(`이전에 성공한 API 경로로 시도: ${this.successfulApiPath}`);
+          const data = await this.fetchApiData(this.successfulApiPath, queryString);
+          this.updateDashboard(data);
+          this.showLoadingIndicator(false);
+          return;
+        } catch (error) {
+          console.warn(`이전에 성공한 경로가 실패했습니다: ${error.message}`);
+          // 경로를 초기화하고 다른 경로 시도
+          this.successfulApiPath = null;
         }
-        
-        console.log('API 응답 데이터:', responseData);
-        
-        // 응답에 데이터가 있는지 확인
-        if (!responseData.stats && !responseData.reviews) {
-          console.warn('API 응답에 유효한 데이터가 없음');
-          throw new Error('응답 데이터가 올바르지 않습니다');
+      }
+      
+      // API 경로 배열 (우선순위 순) - 콘솔 로그에서 성공한 경로를 첫 번째로 설정
+      const apiPaths = [
+        `${window.location.origin}/api/stats_details`,  // 콘솔에서 항상 성공하는 경로
+        `${window.location.origin}/api/stats-details`,
+        `${window.location.origin}/.netlify/functions/stats_details`,
+        `${window.location.origin}/.netlify/functions/stats-details`
+      ];
+      
+      let success = false;
+      
+      for (const apiPath of apiPaths) {
+        try {
+          console.log(`API 경로 시도: ${apiPath}`);
+          const data = await this.fetchApiData(apiPath, queryString);
+          
+          // 성공 시 경로 저장 및 대시보드 업데이트
+          this.successfulApiPath = apiPath;
+          this.updateDashboard(data);
+          console.log(`성공한 API 경로 캐싱: ${apiPath}`);
+          success = true;
+          break;
+        } catch (error) {
+          console.warn(`API 경로 실패: ${apiPath}`, error.message);
+          // 실패 시 다음 경로 시도
+          continue;
         }
+      }
+      
+      // 모든 경로 시도 후에도 데이터를 불러오지 못한 경우
+      if (!success) {
+        console.error('모든 API 경로 시도 실패');
+        this.showAlert('데이터를 불러오는데 실패했습니다. 네트워크 연결을 확인하세요.', 'error');
+        this.clearDashboard();
         
-        // 대시보드 업데이트
-        this.updateDashboard(responseData);
-        
-      } catch (error) {
-        console.error('통계 데이터 로드 오류:', error.message);
-        
-        // 대체 API 경로 시도
-        await this.tryAlternativeApiPath({
-          startDate, endDate, store_code, platform_code, platform
-        });
+        // 여기에 테스트 데이터 생성 기능을 추가할 수 있습니다 (선택 사항)
       }
     } catch (error) {
       console.error('통계 데이터 로드 중 예외 발생:', error);
@@ -1494,66 +1460,61 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
     }
   }
 
-  // 대체 API 경로 시도 함수 추가
-async tryAlternativeApiPath({ startDate, endDate, store_code, platform_code, platform }) {
-  // 다양한 API 경로 시도
-  const alternativePaths = [
-    `${window.location.origin}/api/stats-details`,
-    `${window.location.origin}/api/stats_details`,
-    `${window.location.origin}/.netlify/functions/stats_details`,
-    `${window.location.origin}/.netlify/functions/stats-detail`
-  ];
-  
-  for (const apiPath of alternativePaths) {
-    try {
-      console.log(`대체 API 경로 시도: ${apiPath}`);
+  async fetchApiData(apiPath, queryString) {
+    const response = await fetch(`${apiPath}?${queryString}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': authService.getAuthHeader(),
+        'Accept': 'application/json'
+      },
+      credentials: 'include'
+    });
+    
+    // 인증 오류 처리
+    if (response.status === 401) {
+      console.log('인증 오류, 토큰 갱신 시도');
+      const newSession = await authService.refreshToken();
       
-      const params = new URLSearchParams({
-        store_code: store_code,
-        start_date: this.formatDateForAPI(startDate),
-        end_date: this.formatDateForAPI(endDate)
-      });
-      
-      if (platform) params.append('platform', platform);
-      if (platform_code) params.append('platform_code', platform_code);
-      
-      const response = await fetch(`${apiPath}?${params.toString()}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': authService.getAuthHeader(),
-          'Accept': 'application/json'
-        },
-        credentials: 'include'
-      });
-      
-      if (!response.ok) continue;
-      
-      const responseText = await response.text();
-      
-      // HTML이 아닌지 확인
-      if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
-        continue;
+      if (newSession) {
+        // 토큰 갱신 성공 - 요청 재시도
+        return this.fetchApiData(apiPath, queryString);
+      } else {
+        // 토큰 갱신 실패
+        throw new Error('인증 토큰 갱신 실패');
       }
-      
-      // JSON으로 파싱 시도
+    }
+    
+    if (!response.ok) {
+      throw new Error(`API 요청 실패: ${response.status}`);
+    }
+    
+    // 텍스트로 먼저 받아 확인
+    const responseText = await response.text();
+    
+    // HTML 응답 여부 확인
+    if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+      throw new Error('API가 HTML 응답을 반환했습니다');
+    }
+    
+    // 빈 응답인지 확인
+    if (!responseText.trim()) {
+      throw new Error('API가 빈 응답을 반환했습니다');
+    }
+    
+    // JSON으로 파싱 시도
+    try {
       const responseData = JSON.parse(responseText);
       
-      // 응답에 데이터가 있는지 확인
-      if (responseData.stats || responseData.reviews) {
-        console.log(`성공한 대체 API 경로: ${apiPath}`);
-        this.updateDashboard(responseData);
-        return true;
+      // 응답에 필요한 데이터가 있는지 확인
+      if (!responseData.stats && !responseData.reviews) {
+        throw new Error('응답 데이터가 올바르지 않습니다');
       }
-    } catch (e) {
-      console.warn(`대체 API 경로 시도 실패: ${apiPath}`, e.message);
+      
+      return responseData;
+    } catch (parseError) {
+      throw new Error('API 응답을 JSON으로 파싱할 수 없습니다');
     }
   }
-  
-  // 모든 대체 경로가 실패한 경우 빈 대시보드로 초기화
-  this.showAlert('데이터를 불러오는데 실패했습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.', 'error');
-  this.clearDashboard();
-  return false;
-}
     showAlert(message, type = 'info') {
         const alertElement = document.createElement('div');
         alertElement.id = 'dashboard-alert';
