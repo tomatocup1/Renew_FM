@@ -1,6 +1,8 @@
-// frontend/js/config.js
+// config.js 수정
 export const CONFIG = {
-  API_BASE_URL: "/api",
+  // API 기본 URL을 Netlify Functions URL로 직접 설정
+  API_BASE_URL: `${window.location.origin}/.netlify/functions`,
+  
   DEFAULT_DATE_RANGE: 7,
   CHART_COLORS: {
       rating5: '#4CAF50',

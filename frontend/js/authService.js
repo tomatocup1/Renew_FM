@@ -1,12 +1,16 @@
 // frontend/js/authService.js
 class AuthService {
   constructor() {
-    this.API_URL = '/.netlify/functions';
+    // API URL 설정 - 항상 절대 경로 사용
+    this.API_URL = `${window.location.origin}/.netlify/functions`;
+    
     this.tokenRefreshInterval = null;
     this.rateLimitRetryDelay = 1000;
     this.maxRetries = 3;
     this.isRefreshing = false;
     this.retryQueue = [];
+    
+    // 즉시 토큰 갱신 타이머 초기화
     this.initTokenRefresh();
   }
   
@@ -71,7 +75,7 @@ class AuthService {
       try {
         console.log('로그인 시도:', email);
         
-        // 로그인 API 경로 - 주 경로로 단순화
+        // 로그인 API 경로 - 절대 경로 사용
         const loginPath = `${this.API_URL}/signin`;
         
         console.log(`로그인 API 호출: ${loginPath}`);
@@ -90,7 +94,9 @@ class AuthService {
         
         // 응답 확인 및 처리
         if (!response.ok) {
-          throw new Error('로그인에 실패했습니다. 이메일과 비밀번호를 확인하세요.');
+          throw new Error(response.status === 401 
+            ? '이메일 또는 비밀번호가 올바르지 않습니다.' 
+            : '로그인에 실패했습니다. 다시 시도해주세요.');
         }
         
         // 응답 데이터 처리
@@ -108,23 +114,13 @@ class AuthService {
         // 토큰 갱신 타이머 설정
         await this.initTokenRefresh();
         
-        // 저장 확인
-        const savedSession = localStorage.getItem('session');
-        if (!savedSession) {
-          console.warn('세션 저장 실패, 수동 저장 시도');
-          try {
-            localStorage.setItem('session', JSON.stringify(responseData.session));
-          } catch (e) {
-            console.error('수동 세션 저장 실패:', e);
-          }
-        }
-        
         return responseData;
       } catch (error) {
         console.error('로그인 처리 중 예외 발생:', error);
         throw error;
       }
     }
+    
     
     // frontend/js/authService.js
     async initTokenRefresh() {
@@ -255,26 +251,25 @@ class AuthService {
     }
 
     async refreshToken() {
-      // 이미 갱신 중이면 대기
       if (this.isRefreshing) {
         return new Promise((resolve) => {
           this.retryQueue.push(resolve);
         });
       }
-    
+      
       this.isRefreshing = true;
-    
+      
       try {
         const session = this.getSession();
         if (!session?.refresh_token) {
           console.error('리프레시 토큰이 없습니다');
           return null;
         }
-    
+        
         console.log('토큰 갱신 시도');
         
-        // API 요청
-        const response = await fetch(`${this.API_URL}/refresh-token`, {
+        // 절대 경로로 API 요청
+        const response = await fetch(`${window.location.origin}/.netlify/functions/refresh-token`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -288,28 +283,21 @@ class AuthService {
         
         console.log('토큰 갱신 응답 상태:', response.status);
         
-        // 응답 처리
         if (!response.ok) {
           console.warn('토큰 갱신 실패');
           return null;
         }
         
-        // 성공 응답 처리
-        try {
-          const data = await response.json();
-          
-          if (!data.session) {
-            console.warn('토큰 갱신 응답에 세션 정보 없음');
-            return null;
-          }
-          
-          console.log('토큰 갱신 성공');
-          this.setSession(data.session);
-          return data.session;
-        } catch (jsonError) {
-          console.error('토큰 갱신 응답 파싱 오류:', jsonError);
+        const data = await response.json();
+        
+        if (!data.session) {
+          console.warn('토큰 갱신 응답에 세션 정보 없음');
           return null;
         }
+        
+        console.log('토큰 갱신 성공');
+        this.setSession(data.session);
+        return data.session;
       } catch (error) {
         console.error('토큰 갱신 처리 중 예외 발생:', error);
         return null;
@@ -331,62 +319,73 @@ class AuthService {
         window.location.href = `/login.html?redirect=${currentPath}`;
     }
     async fetchAPI(endpoint, options = {}) {
-      // 경로 구성 시 명시적으로 .netlify/functions 사용
+      // 전체 URL 구성 (절대 경로 사용)
       const url = endpoint.startsWith('http') 
         ? endpoint 
-        : `/.netlify/functions${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+        : `${window.location.origin}/.netlify/functions${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+      
+      try {
+        const defaultOptions = {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          credentials: 'include'
+        };
         
-        try {
-          const defaultOptions = {
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            credentials: 'include'
-          };
-          
-          // 인증 토큰 추가
-          const session = this.getSession();
-          if (session?.access_token) {
-            defaultOptions.headers.Authorization = `Bearer ${session.access_token}`;
-          }
-          
-          // 옵션 병합
-          const mergedOptions = {
-            ...defaultOptions,
-            ...options,
-            headers: {
-              ...defaultOptions.headers,
-              ...options.headers
-            }
-          };
-          
-          console.log(`API 요청: ${url}`, {
-            method: mergedOptions.method || 'GET'
-          });
-          
-          const response = await fetch(url, mergedOptions);
-          
-          // 토큰 만료 시 자동 갱신 시도
-          if (response.status === 401) {
-            console.log('인증 오류 (401), 토큰 갱신 시도');
-            const newSession = await this.refreshToken();
-            
-            if (newSession?.access_token) {
-              // 헤더 업데이트
-              mergedOptions.headers.Authorization = `Bearer ${newSession.access_token}`;
-              
-              // 요청 재시도
-              return fetch(url, mergedOptions);
-            }
-          }
-          
-          return response;
-        } catch (error) {
-          console.error(`API 요청 오류 (${url}):`, error);
-          throw error;
+        // 인증 토큰 추가
+        const session = this.getSession();
+        if (session?.access_token) {
+          defaultOptions.headers.Authorization = `Bearer ${session.access_token}`;
         }
+        
+        // 옵션 병합
+        const mergedOptions = {
+          ...defaultOptions,
+          ...options,
+          headers: {
+            ...defaultOptions.headers,
+            ...options.headers
+          }
+        };
+        
+        console.log(`API 요청: ${url}`, {
+          method: mergedOptions.method || 'GET'
+        });
+        
+        const response = await fetch(url, mergedOptions);
+        
+        // 응답 상태 로깅
+        console.log(`API 응답 상태: ${response.status}, URL: ${url}`);
+        
+        // 토큰 만료 시 자동 갱신 시도
+        if (response.status === 401) {
+          console.log('인증 오류 (401), 토큰 갱신 시도');
+          const newSession = await this.refreshToken();
+          
+          if (newSession?.access_token) {
+            // 헤더 업데이트
+            mergedOptions.headers.Authorization = `Bearer ${newSession.access_token}`;
+            
+            // 요청 재시도
+            console.log('새 토큰으로 요청 재시도');
+            return fetch(url, mergedOptions);
+          } else {
+            // 로그인 페이지로 리디렉션
+            console.error('토큰 갱신 실패, 로그인 페이지로 이동');
+            this.clearSession();
+            window.location.href = '/login.html';
+            throw new Error('인증이 만료되었습니다. 다시 로그인해주세요.');
+          }
+        }
+        
+        return response;
+      } catch (error) {
+        console.error(`API 요청 오류 (${url}):`, error);
+        throw error;
       }
+    }
+
     async fetchWithRetry(url, options, maxRetries = 3, isRefreshAttempt = false) {
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
@@ -520,7 +519,7 @@ class AuthService {
       
       try {
         // 세션 데이터 검증
-        if (typeof session !== 'string' && (!session.access_token && !session.expires_at)) {
+        if (!session.access_token || !session.expires_at) {
           console.warn('세션 데이터 불완전함:', session);
           return;
         }
@@ -528,24 +527,24 @@ class AuthService {
         // 문자열로 변환
         const sessionStr = typeof session === 'string' ? session : JSON.stringify(session);
         
-        // 주 저장소에 저장
         try {
+          // localStorage에 저장 시도
           localStorage.setItem('session', sessionStr);
-          console.log('세션 저장 완료');
-        } catch (mainError) {
-          console.error('로컬 스토리지 저장 실패:', mainError);
+          console.log('세션 저장 완료 (localStorage)');
+        } catch (localStorageError) {
+          console.warn('localStorage 저장 실패:', localStorageError);
           
-          // 백업 저장소에 저장 시도
           try {
+            // sessionStorage에 백업 저장 시도
             sessionStorage.setItem('session', sessionStr);
-            console.log('세션 백업 저장 완료 (sessionStorage)');
-          } catch (backupError) {
-            console.error('모든 저장소 저장 실패:', backupError);
+            console.log('세션 저장 완료 (sessionStorage)');
+          } catch (sessionStorageError) {
+            console.error('모든 저장소 저장 실패:', sessionStorageError);
           }
         }
         
-        // 토큰 갱신 타이머 설정 (비동기로 처리)
-        setTimeout(() => this.initTokenRefresh(), 0);
+        // 토큰 갱신 타이머 설정
+        this.initTokenRefresh();
       } catch (error) {
         console.error('세션 저장 중 예외 발생:', error);
       }

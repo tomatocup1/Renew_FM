@@ -289,63 +289,69 @@ async initializeStoreSelect() {
   try {
     console.log('매장 정보 초기화 시작...');
     
-    // 먼저 인증 상태를 명시적으로 확인
+    // 인증 상태 확인
     if (!await authService.isAuthenticated()) {
       console.log('인증되지 않음');
       window.location.href = '/login.html';
       return;
     }
     
-    // 사용자 권한 확인
+    // 사용자 정보 확인
     const currentUser = await authService.getCurrentUser();
     console.log('현재 사용자 정보:', currentUser);
     
     const isAdmin = currentUser?.role === '운영자';
     console.log('운영자 권한 여부:', isAdmin);
 
-    // API 엔드포인트
-    const apiEndpoint = '/api/stores_user_platform';
+    // API 엔드포인트 - 절대 경로 사용
+    const apiEndpoint = `${window.location.origin}/.netlify/functions/stores_user_platform`;
     
     try {
       console.log(`API 요청 시작: ${apiEndpoint}`);
-      console.log('인증 헤더:', authService.getAuthHeader());
-
+      
       const response = await fetch(apiEndpoint, {
         method: 'GET',
         headers: {
           'Authorization': authService.getAuthHeader(),
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
+          'Accept': 'application/json'
         },
         credentials: 'include'
       });
       
       console.log(`API 응답 상태:`, response.status);
       
+      // 인증 오류 처리
+      if (response.status === 401) {
+        console.log('인증 오류, 토큰 갱신 시도');
+        const newSession = await authService.refreshToken();
+        
+        if (newSession) {
+          // 토큰 갱신 성공 - 페이지 새로고침
+          console.log('토큰 갱신 성공, 페이지 새로고침');
+          window.location.reload();
+          return;
+        } else {
+          // 토큰 갱신 실패 - 로그인 페이지로 이동
+          console.error('토큰 갱신 실패, 로그인 페이지로 이동');
+          window.location.href = '/login.html';
+          return;
+        }
+      }
+      
       if (!response.ok) {
         throw new Error(`API 요청 실패: ${response.status}`);
       }
 
-      // 응답 본문을 텍스트로 먼저 로그
-      const responseText = await response.text();
-      console.log('응답 본문(텍스트):', responseText);
-
-      // JSON 파싱 시도
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-        console.log('파싱된 JSON 데이터:', responseData);
-      } catch (parseError) {
-        console.error('JSON 파싱 오류:', parseError);
-        throw new Error('API 응답이 JSON 형식이 아닙니다');
-      }
+      // 응답 처리
+      const responseData = await response.json();
       
+      // 데이터 검증 
       if (!Array.isArray(responseData)) {
         console.warn('API 응답이 배열이 아님:', typeof responseData);
         throw new Error('응답 데이터 형식이 올바르지 않습니다');
       }
       
-      // 데이터 포맷팅 및 표시
+      // 데이터 표시
       const formattedStores = this.formatStoreData(responseData);
       console.log('포맷팅된 매장 목록:', formattedStores);
       this.populateStoreSelectWithAllOption(formattedStores);
@@ -353,16 +359,59 @@ async initializeStoreSelect() {
     } catch (error) {
       console.error('API 요청 중 오류 발생:', error.message);
       this.showAlert('매장 정보를 불러오는데 실패했습니다. 네트워크 연결을 확인하세요.', 'error');
-      // 매장 선택 비활성화 및 빈 목록 표시
-      this.populateStoreSelectWithAllOption([]);
+      
+      // 폴백 방법 시도
+      await this.tryFallbackMethods(currentUser?.id, isAdmin);
     }
-    
   } catch (error) {
     console.error('매장 목록 초기화 중 오류:', error);
     this.showAlert('매장 정보를 불러오는데 실패했습니다.', 'error');
-    // 매장 선택 비활성화 및 빈 목록 표시
     this.populateStoreSelectWithAllOption([]);
   }
+}
+
+async tryFallbackMethods(userId, isAdmin) {
+  console.log('대체 방법으로 매장 데이터 로드 시도');
+  
+  // 다양한 API 경로 시도
+  const baseURL = window.location.origin;
+  const apiPaths = [
+    `${baseURL}/.netlify/functions/stores-user-platform`,
+    `${baseURL}/api/stores_user_platform`,
+    `${baseURL}/api/stores-user-platform`
+  ];
+  
+  for (const apiPath of apiPaths) {
+    try {
+      console.log(`API 경로 시도: ${apiPath}`);
+      
+      const response = await fetch(apiPath, {
+        method: 'GET',
+        headers: {
+          'Authorization': authService.getAuthHeader(),
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      if (!response.ok) continue;
+      
+      const data = await response.json();
+      
+      if (Array.isArray(data) && data.length > 0) {
+        console.log(`성공한 API 경로: ${apiPath}`);
+        const formattedStores = this.formatStoreData(data);
+        this.populateStoreSelectWithAllOption(formattedStores);
+        return;
+      }
+    } catch (error) {
+      console.warn(`${apiPath} 시도 실패:`, error.message);
+    }
+  }
+  
+  // 모든 방법 실패 시 빈 목록 표시
+  console.log('모든 대체 방법 실패');
+  this.populateStoreSelectWithAllOption([]);
 }
 
 // 매장 데이터 포맷팅 함수
@@ -1344,8 +1393,8 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
       if (platform) params.append('platform', platform);
       if (platform_code) params.append('platform_code', platform_code);
       
-      // API 경로
-      const apiPath = `/api/stats_details`;
+      // API 경로 - 절대 경로 사용
+      const apiPath = `${window.location.origin}/.netlify/functions/stats-details`;
       
       try {
         console.log(`통계 API 요청: ${apiPath}?${params.toString()}`);
@@ -1354,19 +1403,30 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
           method: 'GET',
           headers: {
             'Authorization': authService.getAuthHeader(),
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
+            'Accept': 'application/json'
           },
           credentials: 'include'
         });
         
         console.log(`API 응답 상태:`, response.status);
         
-        // 응답이 JSON인지 확인
-        const contentType = response.headers.get('Content-Type') || '';
-        if (!contentType.includes('application/json')) {
-          console.warn(`JSON이 아닌 응답 수신: ${contentType}`);
-          throw new Error('API 응답이 JSON 형식이 아닙니다');
+        // 인증 오류 처리
+        if (response.status === 401) {
+          console.log('인증 오류, 토큰 갱신 시도');
+          const newSession = await authService.refreshToken();
+          
+          if (newSession) {
+            // 토큰 갱신 성공 - 요청 재시도
+            console.log('토큰 갱신 성공, 요청 재시도');
+            return this.loadStatsAndReviews({ 
+              startDate, endDate, store_code, platform_code, platform 
+            });
+          } else {
+            // 토큰 갱신 실패 - 로그인 페이지로 이동
+            console.error('토큰 갱신 실패, 로그인 페이지로 이동');
+            window.location.href = '/login.html';
+            return;
+          }
         }
         
         if (!response.ok) {

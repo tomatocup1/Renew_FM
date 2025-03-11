@@ -1121,5 +1121,96 @@
 <script type="module" src="js/authService.js"></script>
 <script type="module" src="js/chartManager.js"></script>
 <script type="module" src="js/dashboard.js"></script>
+<div id="connection-debug-tool" style="position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; border-radius: 5px; z-index: 9999; font-size: 12px; max-width: 300px; max-height: 400px; overflow-y: auto;">
+  <h4 style="margin: 0 0 5px 0;">연결 진단 도구</h4>
+  <div>
+    <button id="checkConnection" style="background: #4CAF50; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-right: 5px;">API 연결 확인</button>
+    <button id="resetSession" style="background: #F44336; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">세션 초기화</button>
+  </div>
+  <div id="connectionResults" style="margin-top: 8px; font-family: monospace; font-size: 11px; white-space: pre-wrap;"></div>
+</div>
+
+<script>
+  // 연결 진단 도구
+  document.addEventListener('DOMContentLoaded', () => {
+    const checkConnection = document.getElementById('checkConnection');
+    const resetSession = document.getElementById('resetSession');
+    const connectionResults = document.getElementById('connectionResults');
+    
+    // API 연결 확인
+    checkConnection.addEventListener('click', async () => {
+      connectionResults.textContent = '연결 확인 중...';
+      
+      const results = [];
+      const baseURL = window.location.origin;
+      
+      const endpoints = [
+        `${baseURL}/.netlify/functions/env-check`,
+        `${baseURL}/.netlify/functions/stores_user_platform`
+      ];
+      
+      // 현재 세션 정보
+      let session;
+      try {
+        session = JSON.parse(localStorage.getItem('session') || '{}');
+        results.push(`세션 정보: ${session.access_token ? '있음' : '없음'}`);
+        
+        if (session.access_token) {
+          const expiry = new Date(session.expires_at);
+          const now = new Date();
+          const diff = Math.floor((expiry - now) / 1000);
+          
+          results.push(`토큰 만료: ${diff > 0 ? `${diff}초 후` : '만료됨'}`);
+        }
+      } catch (e) {
+        results.push(`세션 확인 오류: ${e.message}`);
+      }
+      
+      // 각 API 테스트
+      for (const endpoint of endpoints) {
+        try {
+          const headers = session?.access_token 
+            ? { 'Authorization': `Bearer ${session.access_token}` }
+            : {};
+          
+          const start = Date.now();
+          const response = await fetch(endpoint, { headers });
+          const elapsed = Date.now() - start;
+          
+          results.push(`${endpoint.split('/').pop()}: ${response.status} (${elapsed}ms)`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data) {
+              results.push(`응답 샘플: ${JSON.stringify(data).substring(0, 50)}...`);
+            }
+          }
+        } catch (e) {
+          results.push(`${endpoint}: 오류 - ${e.message}`);
+        }
+      }
+      
+      connectionResults.textContent = results.join('\n');
+    });
+    
+    // 세션 초기화
+    resetSession.addEventListener('click', () => {
+      try {
+        localStorage.removeItem('session');
+        localStorage.removeItem('user');
+        sessionStorage.removeItem('session');
+        sessionStorage.removeItem('user');
+        
+        connectionResults.textContent = '세션 초기화 완료.\n로그인 페이지로 이동합니다.';
+        
+        setTimeout(() => {
+          window.location.href = '/login.html';
+        }, 1500);
+      } catch (e) {
+        connectionResults.textContent = `세션 초기화 오류: ${e.message}`;
+      }
+    });
+  });
+</script>
 </body>
 </html>
