@@ -1,7 +1,7 @@
 // frontend/js/authService.js
 class AuthService {
   constructor() {
-    this.API_URL = '/api';
+    this.API_URL = '/.netlify/functions';
     this.tokenRefreshInterval = null;
     this.rateLimitRetryDelay = 1000;
     this.maxRetries = 3;
@@ -331,9 +331,10 @@ class AuthService {
         window.location.href = `/login.html?redirect=${currentPath}`;
     }
     async fetchAPI(endpoint, options = {}) {
-        const url = endpoint.startsWith('http') 
-          ? endpoint 
-          : `${this.API_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+      // 경로 구성 시 명시적으로 .netlify/functions 사용
+      const url = endpoint.startsWith('http') 
+        ? endpoint 
+        : `/.netlify/functions${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
         
         try {
           const defaultOptions = {
