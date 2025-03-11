@@ -16,6 +16,9 @@
     included_files = []
     timeout = 30
     
+  [functions]
+  timeout = 30
+  
 [[redirects]]
   from = "/.netlify/functions/*"
   to = "/.netlify/functions/:splat"
