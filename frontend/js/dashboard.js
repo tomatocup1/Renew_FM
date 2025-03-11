@@ -1432,8 +1432,40 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
         if (!response.ok) {
           throw new Error(`API 요청 실패: ${response.status}`);
         }
+  
+        // 응답이 HTML인지 확인 (응답 타입 체크)
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('text/html')) {
+          console.error('API가 HTML 응답을 반환했습니다. JSON이 예상됩니다.');
+          throw new Error('API가 잘못된 응답 형식을 반환했습니다.');
+        }
         
-        const responseData = await response.json();
+        // 텍스트로 먼저 받아 확인
+        const responseText = await response.text();
+        
+        // HTML 응답 여부 확인 (시작 부분에 <!DOCTYPE 또는 <html이 있는지)
+        if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+          console.error('API가 HTML 응답을 반환했습니다:');
+          console.error(responseText.substring(0, 200) + '...'); // 처음 200자만 로그
+          throw new Error('API가 HTML 응답을 반환했습니다. 서버 구성을 확인하세요.');
+        }
+        
+        // 빈 응답인지 확인
+        if (!responseText.trim()) {
+          console.error('API가 빈 응답을 반환했습니다.');
+          throw new Error('API가 빈 응답을 반환했습니다.');
+        }
+        
+        // JSON으로 파싱 시도
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('JSON 파싱 실패:', parseError);
+          console.error('받은 응답:', responseText.substring(0, 200) + '...');
+          throw new Error('API 응답을 JSON으로 파싱할 수 없습니다.');
+        }
+        
         console.log('API 응답 데이터:', responseData);
         
         // 응답에 데이터가 있는지 확인
@@ -1447,8 +1479,11 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
         
       } catch (error) {
         console.error('통계 데이터 로드 오류:', error.message);
-        this.showAlert('데이터를 불러오는데 실패했습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.', 'error');
-        this.clearDashboard();
+        
+        // 대체 API 경로 시도
+        await this.tryAlternativeApiPath({
+          startDate, endDate, store_code, platform_code, platform
+        });
       }
     } catch (error) {
       console.error('통계 데이터 로드 중 예외 발생:', error);
@@ -1459,6 +1494,66 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
     }
   }
 
+  // 대체 API 경로 시도 함수 추가
+async tryAlternativeApiPath({ startDate, endDate, store_code, platform_code, platform }) {
+  // 다양한 API 경로 시도
+  const alternativePaths = [
+    `${window.location.origin}/api/stats-details`,
+    `${window.location.origin}/api/stats_details`,
+    `${window.location.origin}/.netlify/functions/stats_details`,
+    `${window.location.origin}/.netlify/functions/stats-detail`
+  ];
+  
+  for (const apiPath of alternativePaths) {
+    try {
+      console.log(`대체 API 경로 시도: ${apiPath}`);
+      
+      const params = new URLSearchParams({
+        store_code: store_code,
+        start_date: this.formatDateForAPI(startDate),
+        end_date: this.formatDateForAPI(endDate)
+      });
+      
+      if (platform) params.append('platform', platform);
+      if (platform_code) params.append('platform_code', platform_code);
+      
+      const response = await fetch(`${apiPath}?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': authService.getAuthHeader(),
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      if (!response.ok) continue;
+      
+      const responseText = await response.text();
+      
+      // HTML이 아닌지 확인
+      if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+        continue;
+      }
+      
+      // JSON으로 파싱 시도
+      const responseData = JSON.parse(responseText);
+      
+      // 응답에 데이터가 있는지 확인
+      if (responseData.stats || responseData.reviews) {
+        console.log(`성공한 대체 API 경로: ${apiPath}`);
+        this.updateDashboard(responseData);
+        return true;
+      }
+    } catch (e) {
+      console.warn(`대체 API 경로 시도 실패: ${apiPath}`, e.message);
+    }
+  }
+  
+  // 모든 대체 경로가 실패한 경우 빈 대시보드로 초기화
+  this.showAlert('데이터를 불러오는데 실패했습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.', 'error');
+  this.clearDashboard();
+  return false;
+}
     showAlert(message, type = 'info') {
         const alertElement = document.createElement('div');
         alertElement.id = 'dashboard-alert';
