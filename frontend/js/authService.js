@@ -229,7 +229,7 @@ class AuthService {
     }
 
     // 테스트 계정 체크 함수 추가
-    sTestAccount(email) {
+    isTestAccount(email) {
       const testDomains = ['test.com', 'test.test', 'example.com'];
       const testEmails = ['testadmin@example.com', 'tomatocup1@gmail.com', 'test@test.com'];
       
@@ -270,7 +270,7 @@ class AuthService {
         throw e;
       }
     }
-    
+
     // frontend/js/authService.js
     async initTokenRefresh() {
         try {
