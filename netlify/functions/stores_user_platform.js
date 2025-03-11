@@ -11,6 +11,22 @@ exports.handler = async (event, context) => {
     const authHeader = event.headers.authorization || event.headers.Authorization || '';
     console.log('Authorization header:', authHeader.substring(0, 20) + '...');
     
+    // 먼저 Supabase 연결 테스트 추가
+    try {
+      console.log('Supabase 연결 테스트 시작');
+      console.log('Supabase URL:', process.env.SUPABASE_URL ? '설정됨' : '없음');
+      console.log('Supabase Key:', process.env.SUPABASE_SERVICE_KEY ? '설정됨' : '없음');
+      
+      // 간단한 쿼리로 연결 테스트
+      const testResult = await supabase.from('users').select('count').limit(1);
+      console.log('Supabase 연결 테스트 결과:', testResult.error ? '실패' : '성공');
+      if (testResult.error) {
+        console.error('Supabase 연결 오류:', testResult.error.message);
+      }
+    } catch (connectionError) {
+      console.error('Supabase 연결 테스트 예외:', connectionError.message);
+    }
+    
     // 임시 세션인 경우에도 DB 데이터 조회 시도
     let userId = null;
     
