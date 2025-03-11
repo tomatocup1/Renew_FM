@@ -6,7 +6,6 @@
 [functions]
   node_bundler = "esbuild"
   external_node_modules = ["@supabase/supabase-js", "pg"]
-  timeout = 30  # 여기에 타임아웃 설정 추가 (중복 섹션 대신)
   
   # 함수별 설정
   [functions.stores_user_platform]
@@ -15,6 +14,15 @@
   
   [functions.stats-details]
     included_files = []
+    timeout = 30
+    
+  [functions.signin]
+    timeout = 30
+    
+  [functions.auth-user]
+    timeout = 30
+    
+  [functions.refresh-token]
     timeout = 30
   
 [[redirects]]
