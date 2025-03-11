@@ -3,6 +3,12 @@
   publish = "frontend"
   functions = "netlify/functions"
 
+[[redirects]]
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
 # 일반 API 경로 처리 (캐치올 리다이렉트)
 [[redirects]]
   from = "/api/*"
@@ -59,13 +65,13 @@
   
 [[redirects]]
   from = "/api/stores-user-platform"
-  to = "/.netlify/functions/stores-user-platform"
+  to = "/.netlify/functions/stores_user_platform"
   status = 200
   force = true
 
 [[redirects]]
   from = "/api/stores_user_platform"
-  to = "/.netlify/functions/stores-user-platform"
+  to = "/.netlify/functions/stores_user_platform"
   status = 200
   force = true
 
