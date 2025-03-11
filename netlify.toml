@@ -3,6 +3,19 @@
   publish = "frontend"
   functions = "netlify/functions"
 
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@supabase/supabase-js", "pg"]
+  
+  # 함수별 설정
+  [functions.stores_user_platform]
+    included_files = []
+    timeout = 30
+  
+  [functions.stats-details]
+    included_files = []
+    timeout = 30
+    
 [[redirects]]
   from = "/.netlify/functions/*"
   to = "/.netlify/functions/:splat"
@@ -119,6 +132,35 @@
   status = 200
   force = true
 
+# Netlify 내장 authService 경로
+[[redirects]]
+  from = "/.netlify/auth/*"
+  to = "/.netlify/identity/:splat"
+  status = 200
+  force = true
+
+# 로그인 관련 CORS 설정
+[[headers]]
+  for = "/.netlify/functions/signin"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+
+[[headers]]
+  for = "/api/signin"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+
+[[headers]]
+  for = "/api/login"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS" 
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+  
 [[redirects]]
   from = "/api/login"
   to = "/.netlify/functions/signin"

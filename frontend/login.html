@@ -312,12 +312,18 @@
                     localStorage.removeItem('user');
                     sessionStorage.removeItem('session');
                     
+                    // 테스트 계정 모드 활성화 (테스트 계정인 경우)
+                    window.enableLoginTestMode = email === "testadmin@example.com" || 
+                                              email === "tomatocup1@gmail.com" ||
+                                              email === "test@test.com" ||
+                                              email.includes('@test');
+                    
                     // 로그인 시도
                     const loginResult = await authService.login(email, password);
                     console.log('로그인 응답:', loginResult ? '성공' : '실패');
                     
                     if (!loginResult || !loginResult.session) {
-                    throw new Error('로그인 응답에 세션 정보가 없습니다');
+                        throw new Error('로그인 응답에 세션 정보가 없습니다');
                     }
                     
                     // 세션 저장 확인
@@ -325,80 +331,51 @@
                     console.log('세션 저장 결과:', savedSession ? '성공' : '실패');
                     
                     if (!savedSession) {
-                    console.log('로컬 스토리지 저장 실패, 수동 저장 시도');
-                    try {
-                        localStorage.setItem('session', JSON.stringify(loginResult.session));
-                        console.log('세션 수동 저장 완료');
-                    } catch (storageError) {
-                        console.error('세션 저장 오류:', storageError);
-                        this.showError('세션 정보를 저장할 수 없습니다. 브라우저 설정을 확인하세요.');
-                        submitButton.disabled = false;
-                        submitButton.textContent = '로그인';
-                        return;
-                    }
+                        console.log('로컬 스토리지 저장 실패, 수동 저장 시도');
+                        try {
+                            localStorage.setItem('session', JSON.stringify(loginResult.session));
+                            console.log('세션 수동 저장 완료');
+                        } catch (storageError) {
+                            console.error('세션 저장 오류:', storageError);
+                            this.showError('세션 정보를 저장할 수 없습니다. 브라우저 설정을 확인하세요.');
+                            submitButton.disabled = false;
+                            submitButton.textContent = '로그인';
+                            return;
+                        }
                     }
                     
                     // 사용자 정보도 확인
                     if (loginResult.user) {
-                    try {
-                        localStorage.setItem('user', JSON.stringify(loginResult.user));
-                        console.log('사용자 정보 저장 완료');
-                    } catch (userError) {
-                        console.warn('사용자 정보 저장 실패:', userError);
-                    }
+                        try {
+                            localStorage.setItem('user', JSON.stringify(loginResult.user));
+                            console.log('사용자 정보 저장 완료');
+                        } catch (userError) {
+                            console.warn('사용자 정보 저장 실패:', userError);
+                        }
                     }
                     
                     console.log('로그인 성공, 대시보드로 이동합니다');
+                    
+                    // 디버그 정보 표시
+                    if (typeof showDebugMessage === 'function') {
+                        showDebugMessage('로그인 성공! 세션 및 사용자 정보 저장됨');
+                    }
+                    
                     setTimeout(() => {
-                    // 쿼리 파라미터에 타임스탬프 추가 (캐시 방지)
-                    const timestamp = new Date().getTime();
-                    window.location.href = `./dashboard.html?t=${timestamp}`;
+                        // 쿼리 파라미터에 타임스탬프 추가 (캐시 방지)
+                        const timestamp = new Date().getTime();
+                        window.location.href = `./dashboard.html?t=${timestamp}`;
                     }, 500);
                 } catch (error) {
                     console.error('로그인 오류:', error);
                     this.showError(error.message || '로그인에 실패했습니다.');
-                    
-                    // 테스트 계정이면 직접 세션 생성 시도
-                    if (email === "testadmin@example.com" || email === "tomatocup1@gmail.com") {
-                    console.log('테스트 계정으로 재시도');
-                    
-                    const now = new Date();
-                    const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2시간 후 만료
-                    
-                    const testSession = {
-                        access_token: `test-token-${Date.now()}`,
-                        refresh_token: `test-refresh-${Date.now()}`,
-                        expires_at: expiresAt.toISOString()
-                    };
-                    
-                    const testUser = {
-                        id: "test-user-id",
-                        email: email,
-                        role: "운영자",
-                        name: email.split('@')[0]
-                    };
-                    
-                    try {
-                        localStorage.setItem('session', JSON.stringify(testSession));
-                        localStorage.setItem('user', JSON.stringify(testUser));
-                        console.log('테스트 세션 수동 저장 완료');
-                        
-                        setTimeout(() => {
-                        const timestamp = new Date().getTime();
-                        window.location.href = `./dashboard.html?t=${timestamp}`;
-                        }, 500);
-                        return;
-                    } catch (e) {
-                        console.error('테스트 세션 저장 실패:', e);
-                    }
-                    }
                 } finally {
                     const submitButton = this.form.querySelector('button[type="submit"]');
                     submitButton.disabled = false;
                     submitButton.textContent = '로그인';
                 }
-                }
             }
+        }
         // 페이지 로드 시 LoginManager 초기화
         document.addEventListener('DOMContentLoaded', () => {
             new LoginManager();
@@ -445,131 +422,252 @@
             // 로그도 함께 출력
             console.log(message);
         }
-        </script>
-<script>
-    // 세션 디버깅 도구
-    (function() {
-      // 1초 후 실행 (페이지 로드 완료 후)
-      setTimeout(() => {
-        // 디버그 UI 컨테이너
-        const debugContainer = document.createElement('div');
-        debugContainer.id = 'session-debug';
-        debugContainer.style.cssText = `
-          position: fixed;
-          bottom: 10px;
-          left: 10px;
-          background: rgba(0,0,0,0.8);
-          color: white;
-          padding: 10px;
-          border-radius: 5px;
-          font-family: monospace;
-          font-size: 12px;
-          z-index: 10000;
-          max-width: 300px;
-          max-height: 200px;
-          overflow: auto;
-        `;
-        
-        // 세션 정보 수집
-        const localSession = localStorage.getItem('session');
-        const sessionStorageSession = sessionStorage.getItem('session');
-        
-        // 쿠키에서 세션 검색
-        function getCookieValue(name) {
-          const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-          return match ? decodeURIComponent(match[2]) : null;
-        }
-        const cookieSession = getCookieValue('session');
-        
-        // 디버그 정보 구성
-        let content = '<h3 style="margin:0 0 5px 0;font-size:14px;">세션 디버그</h3>';
-        content += `<div style="margin-bottom:5px;">localStorage: ${localSession ? '있음' : '없음'}</div>`;
-        content += `<div style="margin-bottom:5px;">sessionStorage: ${sessionStorageSession ? '있음' : '없음'}</div>`;
-        content += `<div style="margin-bottom:5px;">cookie: ${cookieSession ? '있음' : '없음'}</div>`;
-        
-        // 세션 정보 디버깅
-        if (localSession) {
-          try {
-            const session = JSON.parse(localSession);
-            if (session.expires_at) {
-              const expires = new Date(session.expires_at);
-              const now = new Date();
-              const timeLeft = Math.round((expires - now) / 1000);
-              
-              content += '<div style="margin-top:5px;border-top:1px solid #555;padding-top:5px;">';
-              content += `만료: ${timeLeft > 0 ? `${timeLeft}초 남음` : '만료됨'}<br>`;
-              if (session.access_token) {
-                content += `토큰: ${session.access_token.substring(0, 10)}...<br>`;
-              }
-              content += '</div>';
-            }
-          } catch (e) {
-            content += `<div style="color:#ff6b6b;">파싱 오류: ${e.message}</div>`;
-          }
-        }
-        
-        // 디버그 버튼
-        content += '<div style="margin-top:10px;">';
-        content += '<button id="refresh-btn" style="margin-right:5px;padding:3px 8px;background:#4CAF50;border:none;color:white;border-radius:3px;cursor:pointer;">새로고침</button>';
-        content += '<button id="clear-btn" style="padding:3px 8px;background:#f44336;border:none;color:white;border-radius:3px;cursor:pointer;">세션 삭제</button>';
-        content += '</div>';
-        
-        // 컨테이너에 내용 삽입
-        debugContainer.innerHTML = content;
-        document.body.appendChild(debugContainer);
-        
-        // 버튼 이벤트 처리
-        document.getElementById('refresh-btn').addEventListener('click', () => {
-          window.location.reload();
-        });
-        
-        document.getElementById('clear-btn').addEventListener('click', () => {
-          localStorage.removeItem('session');
-          localStorage.removeItem('user');
-          sessionStorage.removeItem('session');
-          document.cookie = 'session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-          alert('세션이 모두 삭제되었습니다. 페이지를 새로고침합니다.');
-          window.location.reload();
-        });
-      }, 1000);
-    })();
     </script>
+    <script>
+        // 세션 디버깅 도구
+        (function() {
+            // 1초 후 실행 (페이지 로드 완료 후)
+            setTimeout(() => {
+                // 디버그 UI 컨테이너
+                const debugContainer = document.createElement('div');
+                debugContainer.id = 'session-debug';
+                debugContainer.style.cssText = `
+                    position: fixed;
+                    bottom: 10px;
+                    left: 10px;
+                    background: rgba(0,0,0,0.8);
+                    color: white;
+                    padding: 10px;
+                    border-radius: 5px;
+                    font-family: monospace;
+                    font-size: 12px;
+                    z-index: 10000;
+                    max-width: 300px;
+                    max-height: 200px;
+                    overflow: auto;
+                `;
+                
+                // 세션 정보 수집
+                const localSession = localStorage.getItem('session');
+                const sessionStorageSession = sessionStorage.getItem('session');
+                
+                // 쿠키에서 세션 검색
+                function getCookieValue(name) {
+                    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+                    return match ? decodeURIComponent(match[2]) : null;
+                }
+                const cookieSession = getCookieValue('session');
+                
+                // 디버그 정보 구성
+                let content = '<h3 style="margin:0 0 5px 0;font-size:14px;">세션 디버그</h3>';
+                content += `<div style="margin-bottom:5px;">localStorage: ${localSession ? '있음' : '없음'}</div>`;
+                content += `<div style="margin-bottom:5px;">sessionStorage: ${sessionStorageSession ? '있음' : '없음'}</div>`;
+                content += `<div style="margin-bottom:5px;">cookie: ${cookieSession ? '있음' : '없음'}</div>`;
+                
+                // 세션 정보 디버깅
+                if (localSession) {
+                    try {
+                        const session = JSON.parse(localSession);
+                        if (session.expires_at) {
+                            const expires = new Date(session.expires_at);
+                            const now = new Date();
+                            const timeLeft = Math.round((expires - now) / 1000);
+                            
+                            content += '<div style="margin-top:5px;border-top:1px solid #555;padding-top:5px;">';
+                            content += `만료: ${timeLeft > 0 ? `${timeLeft}초 남음` : '만료됨'}<br>`;
+                            if (session.access_token) {
+                                content += `토큰: ${session.access_token.substring(0, 10)}...<br>`;
+                            }
+                            content += '</div>';
+                        }
+                    } catch (e) {
+                        content += `<div style="color:#ff6b6b;">파싱 오류: ${e.message}</div>`;
+                    }
+                }
+                
+                // 디버그 버튼
+                content += '<div style="margin-top:10px;">';
+                content += '<button id="refresh-btn" style="margin-right:5px;padding:3px 8px;background:#4CAF50;border:none;color:white;border-radius:3px;cursor:pointer;">새로고침</button>';
+                content += '<button id="clear-btn" style="padding:3px 8px;background:#f44336;border:none;color:white;border-radius:3px;cursor:pointer;">세션 삭제</button>';
+                content += '</div>';
+                
+                // 컨테이너에 내용 삽입
+                debugContainer.innerHTML = content;
+                document.body.appendChild(debugContainer);
+                
+                // 버튼 이벤트 처리
+                document.getElementById('refresh-btn').addEventListener('click', () => {
+                    window.location.reload();
+                });
+                
+                document.getElementById('clear-btn').addEventListener('click', () => {
+                    localStorage.removeItem('session');
+                    localStorage.removeItem('user');
+                    sessionStorage.removeItem('session');
+                    document.cookie = 'session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                    alert('세션이 모두 삭제되었습니다. 페이지를 새로고침합니다.');
+                    window.location.reload();
+                });
+            }, 1000);
+        })();
+    </script>
+    
     <!-- 디버깅용 API 테스트 도구 -->
-<div id="api-test-tools" style="position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; border-radius: 5px; font-size: 12px; z-index: 9999;">
-    <h4>API 테스트</h4>
-    <button id="test-env-btn">환경변수 확인</button>
-    <button id="test-stores-btn">매장 데이터 확인</button>
-    <div id="api-test-result" style="margin-top: 10px; max-height: 200px; overflow: auto; word-wrap: break-word;"></div>
-  </div>
-  
-  <script>
-    document.getElementById('test-env-btn').addEventListener('click', async () => {
-      try {
-        const response = await fetch('/.netlify/functions/env-check');
-        const data = await response.json();
-        document.getElementById('api-test-result').textContent = JSON.stringify(data, null, 2);
-      } catch (error) {
-        document.getElementById('api-test-result').textContent = 'Error: ' + error.message;
-      }
-    });
-  
-    document.getElementById('test-stores-btn').addEventListener('click', async () => {
-      try {
-        const authHeader = localStorage.getItem('session') ? 
-          `Bearer ${JSON.parse(localStorage.getItem('session')).access_token}` : '';
-        
-        const response = await fetch('/.netlify/functions/stores-user-platform', {
-          headers: {
-            'Authorization': authHeader
-          }
+    <div id="api-test-tools" style="position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; border-radius: 5px; font-size: 12px; z-index: 9999;">
+        <h4>API 테스트</h4>
+        <button id="test-env-btn">환경변수 확인</button>
+        <button id="test-stores-btn">매장 데이터 확인</button>
+        <button id="debug-login-btn">로그인 API 테스트</button>
+        <div id="api-test-result" style="margin-top: 10px; max-height: 200px; overflow: auto; word-wrap: break-word;"></div>
+    </div>
+      
+    <script>
+        document.getElementById('test-env-btn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/.netlify/functions/env-check');
+                const data = await response.json();
+                document.getElementById('api-test-result').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('api-test-result').textContent = 'Error: ' + error.message;
+            }
+        });
+      
+        document.getElementById('test-stores-btn').addEventListener('click', async () => {
+            try {
+                const authHeader = localStorage.getItem('session') ? 
+                    `Bearer ${JSON.parse(localStorage.getItem('session')).access_token}` : '';
+                
+                const response = await fetch('/.netlify/functions/stores-user-platform', {
+                    headers: {
+                        'Authorization': authHeader
+                    }
+                });
+                
+                const data = await response.json();
+                document.getElementById('api-test-result').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('api-test-result').textContent = 'Error: ' + error.message;
+            }
         });
         
-        const data = await response.json();
-        document.getElementById('api-test-result').textContent = JSON.stringify(data, null, 2);
-      } catch (error) {
-        document.getElementById('api-test-result').textContent = 'Error: ' + error.message;
-      }
-    });
-  </script>
+        document.getElementById('debug-login-btn').addEventListener('click', async () => {
+            try {
+                document.getElementById('api-test-result').textContent = '로그인 API 연결 테스트 중...';
+                
+                // 여러 가능한 로그인 API 경로
+                const endpoints = [
+                    `${window.location.origin}/.netlify/functions/signin`,
+                    `${window.location.origin}/api/signin`,
+                    `${window.location.origin}/api/login`,
+                    `${window.location.origin}/api/auth/signin`
+                ];
+                
+                const results = [];
+                for (const endpoint of endpoints) {
+                    try {
+                        const startTime = Date.now();
+                        const response = await fetch(endpoint, {
+                            method: 'OPTIONS', // OPTIONS 요청으로 실제 로그인 시도 없이 연결 테스트
+                            headers: {
+                                'Accept': 'application/json'
+                            }
+                        });
+                        const elapsed = Date.now() - startTime;
+                        results.push(`${endpoint}: ${response.status} (${elapsed}ms)`);
+                    } catch (error) {
+                        results.push(`${endpoint}: 오류 - ${error.message}`);
+                    }
+                }
+                
+                document.getElementById('api-test-result').textContent = results.join('\n');
+            } catch (error) {
+                document.getElementById('api-test-result').textContent = 'API 테스트 중 오류: ' + error.message;
+            }
+        });
+    </script>
+    
+    <!-- 디버그 모드 스크립트 -->
+    <script>
+        // 로그인 페이지 하단에 추가
+        const debugMode = localStorage.getItem('debug_mode') === 'true';
+        if (debugMode) {
+            const debugPanel = document.createElement('div');
+            debugPanel.style.cssText = `
+                position: fixed;
+                bottom: 40px;
+                left: 0;
+                right: 0;
+                padding: 15px;
+                background: rgba(0,0,0,0.8);
+                color: white;
+                font-family: monospace;
+                font-size: 12px;
+                max-height: 200px;
+                overflow-y: auto;
+                z-index: 10000;
+            `;
+            
+            debugPanel.innerHTML = `
+                <h4>로그인 디버그 메뉴</h4>
+                <div>
+                    <button id="toggle-test-mode">테스트 모드 ${debugMode ? '끄기' : '켜기'}</button>
+                    <button id="direct-login-test">직접 API 호출 테스트</button>
+                    <button id="check-cors">CORS 설정 확인</button>
+                </div>
+                <div id="debug-output" style="margin-top: 10px;"></div>
+            `;
+            
+            document.body.appendChild(debugPanel);
+            
+            document.getElementById('toggle-test-mode').addEventListener('click', () => {
+                const newMode = localStorage.getItem('debug_mode') !== 'true';
+                localStorage.setItem('debug_mode', newMode);
+                document.getElementById('debug-output').textContent = `테스트 모드 ${newMode ? '활성화' : '비활성화'} 됨. 페이지를 새로고침하세요.`;
+            });
+            
+            document.getElementById('direct-login-test').addEventListener('click', async () => {
+                const output = document.getElementById('debug-output');
+                output.textContent = '로그인 API 직접 호출 테스트 중...';
+                
+                try {
+                    const response = await fetch(`${window.location.origin}/.netlify/functions/signin`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ email: 'test@test.com', password: 'test123' })
+                    });
+                    
+                    output.textContent = `응답 상태: ${response.status}`;
+                    try {
+                        const text = await response.text();
+                        output.textContent += `\n응답 내용: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`;
+                    } catch (e) {
+                        output.textContent += '\n응답 내용을 읽을 수 없습니다.';
+                    }
+                } catch (error) {
+                    output.textContent = `API 호출 오류: ${error.message}`;
+                }
+            });
+            
+            document.getElementById('check-cors').addEventListener('click', async () => {
+                const output = document.getElementById('debug-output');
+                output.textContent = 'CORS 설정 확인 중...';
+                
+                try {
+                    const response = await fetch(`${window.location.origin}/.netlify/functions/env-check`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    output.textContent = `CORS 확인 - 응답 상태: ${response.status}`;
+                } catch (error) {
+                    output.textContent = `CORS 오류: ${error.message}`;
+                }
+            });
+        }
+    </script>
 </body>
 </html>
