@@ -204,183 +204,211 @@
 
     <script type="module">
         import { authService } from './js/authService.js';
-    
+      
         class LoginManager {
-            constructor() {
-                this.form = document.getElementById('loginForm');
-                this.googleLoginBtn = document.getElementById('googleLoginBtn');
-                this.kakaoLoginBtn = document.getElementById('kakaoLoginBtn');
-                this.initializeEventListeners();
-                this.checkAuthState();
+          constructor() {
+            this.form = document.getElementById('loginForm');
+            this.googleLoginBtn = document.getElementById('googleLoginBtn');
+            this.kakaoLoginBtn = document.getElementById('kakaoLoginBtn');
+            this.initializeEventListeners();
+            this.checkAuthState();
+            
+            // 디버그 플래그 설정
+            window.debugMode = localStorage.getItem('debug_mode') === 'true';
+            window.enableLoginTestMode = false;
+          }
+      
+          initializeEventListeners() {
+            this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+            this.googleLoginBtn.addEventListener('click', () => this.handleSocialLogin('google'));
+            this.kakaoLoginBtn.addEventListener('click', () => this.handleSocialLogin('kakao'));
+          }
+      
+          // 소셜 로그인 처리
+          async handleSocialLogin(provider) {
+            try {
+              // 로딩 상태 표시
+              this.showLoadingState(provider, true);
+              
+              // 소셜 로그인 URL 요청
+              const result = await authService.getSocialLoginUrl(provider);
+              
+              if (result && result.url) {
+                // 소셜 로그인 페이지로 리디렉션
+                window.location.href = result.url;
+              } else {
+                this.showError('소셜 로그인 URL을 가져오는데 실패했습니다.');
+              }
+            } catch (error) {
+              console.error(`${provider} login error:`, error);
+              this.showError(error.message || `${provider} 로그인에 실패했습니다.`);
+              this.showLoadingState(provider, false);
             }
-    
-            initializeEventListeners() {
-                this.form.addEventListener('submit', (e) => this.handleSubmit(e));
-                this.googleLoginBtn.addEventListener('click', () => this.handleSocialLogin('google'));
-                this.kakaoLoginBtn.addEventListener('click', () => this.handleSocialLogin('kakao'));
-            }
-    
-            // 소셜 로그인 처리
-            async handleSocialLogin(provider) {
-                try {
-                    // 로딩 상태 표시
-                    this.showLoadingState(provider, true);
-                    
-                    // 소셜 로그인 URL 요청
-                    const result = await authService.getSocialLoginUrl(provider);
-                    
-                    if (result && result.url) {
-                        // 소셜 로그인 페이지로 리디렉션
-                        window.location.href = result.url;
-                    } else {
-                        this.showError('소셜 로그인 URL을 가져오는데 실패했습니다.');
-                    }
-                } catch (error) {
-                    console.error(`${provider} login error:`, error);
-                    this.showError(error.message || `${provider} 로그인에 실패했습니다.`);
-                    this.showLoadingState(provider, false);
-                }
+          }
+          
+          // 로딩 상태 표시
+          showLoadingState(provider, isLoading) {
+            const button = provider === 'google' ? this.googleLoginBtn : this.kakaoLoginBtn;
+            const originalText = provider === 'google' ? 'Google 계정으로 로그인' : '카카오 계정으로 로그인';
+            const loadingText = '로그인 중...';
+            
+            button.disabled = isLoading;
+            button.innerHTML = isLoading 
+              ? `<span class="social-icon"></span>${loadingText}` 
+              : `<img src="${provider === 'google' 
+                  ? 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' 
+                  : 'https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png'}" 
+                  alt="${provider}" class="social-icon">${originalText}`;
+          }
+      
+          // 이미 로그인되어 있는지 확인
+          async checkAuthState() {
+            if (authService.isAuthenticated()) {
+              window.location.href = './dashboard.html';
             }
             
-            // 로딩 상태 표시
-            showLoadingState(provider, isLoading) {
-                const button = provider === 'google' ? this.googleLoginBtn : this.kakaoLoginBtn;
-                const originalText = provider === 'google' ? 'Google 계정으로 로그인' : '카카오 계정으로 로그인';
-                const loadingText = '로그인 중...';
-                
-                button.disabled = isLoading;
-                button.innerHTML = isLoading 
-                    ? `<span class="social-icon"></span>${loadingText}` 
-                    : `<img src="${provider === 'google' 
-                        ? 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' 
-                        : 'https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png'}" 
-                        alt="${provider}" class="social-icon">${originalText}`;
+            // URL 파라미터에서 에러 확인
+            const urlParams = new URLSearchParams(window.location.search);
+            const error = urlParams.get('error');
+            if (error) {
+              this.showError(decodeURIComponent(error));
             }
-    
-            // 이미 로그인되어 있는지 확인
-            async checkAuthState() {
-                if (authService.isAuthenticated()) {
-                    window.location.href = './dashboard.html';
-                }
-                
-                // URL 파라미터에서 에러 확인
-                const urlParams = new URLSearchParams(window.location.search);
-                const error = urlParams.get('error');
-                if (error) {
-                    this.showError(decodeURIComponent(error));
-                }
+          }
+      
+          // 에러 메시지 초기화
+          clearErrors() {
+            document.querySelectorAll('.error-message').forEach(el => {
+              el.classList.remove('show');
+              el.textContent = '';
+            });
+          }
+      
+          // 에러 메시지 표시
+          showError(message) {
+            const loginError = document.getElementById('loginError');
+            loginError.textContent = message;
+            loginError.classList.add('show');
+          }
+      
+          async handleSubmit(e) {
+            e.preventDefault();
+            this.clearErrors();
+            
+            console.log('로그인 시작');
+      
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+      
+            if (!email || !password) {
+              this.showError('이메일과 비밀번호를 모두 입력해주세요.');
+              return;
             }
-    
-            // 에러 메시지 초기화
-            clearErrors() {
-                document.querySelectorAll('.error-message').forEach(el => {
-                    el.classList.remove('show');
-                    el.textContent = '';
-                });
-            }
-    
-            // 에러 메시지 표시
-            showError(message) {
-                const loginError = document.getElementById('loginError');
-                loginError.textContent = message;
-                loginError.classList.add('show');
-            }
-    
-            async handleSubmit(e) {
-                e.preventDefault();
-                this.clearErrors();
-                
-                console.log('로그인 시작');
-
-                const email = document.getElementById('email').value;
-                const password = document.getElementById('password').value;
-
-                if (!email || !password) {
-                    this.showError('이메일과 비밀번호를 모두 입력해주세요.');
-                    return;
-                }
-
+      
+            try {
+              const submitButton = this.form.querySelector('button[type="submit"]');
+              submitButton.disabled = true;
+              submitButton.textContent = '로그인 중...';
+      
+              console.log('로그인 시도:', email);
+              
+              // 기존 세션 정보 초기화
+              localStorage.removeItem('session');
+              localStorage.removeItem('user');
+              sessionStorage.removeItem('session');
+              
+              // 테스트 계정 모드 활성화 (테스트 계정 패턴 확인)
+              window.enableLoginTestMode = this.isTestAccount(email);
+              
+              // 로그인 시도
+              const loginResult = await authService.login(email, password);
+              console.log('로그인 응답:', loginResult ? '성공' : '실패');
+              
+              if (!loginResult || !loginResult.session) {
+                throw new Error('로그인 응답에 세션 정보가 없습니다');
+              }
+              
+              // 세션 저장 확인
+              const savedSession = localStorage.getItem('session');
+              console.log('세션 저장 결과:', savedSession ? '성공' : '실패');
+              
+              if (!savedSession) {
+                console.log('로컬 스토리지 저장 실패, 수동 저장 시도');
                 try {
-                    const submitButton = this.form.querySelector('button[type="submit"]');
-                    submitButton.disabled = true;
-                    submitButton.textContent = '로그인 중...';
-
-                    console.log('로그인 시도:', email);
-                    
-                    // 기존 세션 정보 초기화
-                    localStorage.removeItem('session');
-                    localStorage.removeItem('user');
-                    sessionStorage.removeItem('session');
-                    
-                    // 테스트 계정 모드 활성화 (테스트 계정인 경우)
-                    window.enableLoginTestMode = email === "testadmin@example.com" || 
-                                              email === "tomatocup1@gmail.com" ||
-                                              email === "test@test.com" ||
-                                              email.includes('@test');
-                    
-                    // 로그인 시도
-                    const loginResult = await authService.login(email, password);
-                    console.log('로그인 응답:', loginResult ? '성공' : '실패');
-                    
-                    if (!loginResult || !loginResult.session) {
-                        throw new Error('로그인 응답에 세션 정보가 없습니다');
-                    }
-                    
-                    // 세션 저장 확인
-                    const savedSession = localStorage.getItem('session');
-                    console.log('세션 저장 결과:', savedSession ? '성공' : '실패');
-                    
-                    if (!savedSession) {
-                        console.log('로컬 스토리지 저장 실패, 수동 저장 시도');
-                        try {
-                            localStorage.setItem('session', JSON.stringify(loginResult.session));
-                            console.log('세션 수동 저장 완료');
-                        } catch (storageError) {
-                            console.error('세션 저장 오류:', storageError);
-                            this.showError('세션 정보를 저장할 수 없습니다. 브라우저 설정을 확인하세요.');
-                            submitButton.disabled = false;
-                            submitButton.textContent = '로그인';
-                            return;
-                        }
-                    }
-                    
-                    // 사용자 정보도 확인
-                    if (loginResult.user) {
-                        try {
-                            localStorage.setItem('user', JSON.stringify(loginResult.user));
-                            console.log('사용자 정보 저장 완료');
-                        } catch (userError) {
-                            console.warn('사용자 정보 저장 실패:', userError);
-                        }
-                    }
-                    
-                    console.log('로그인 성공, 대시보드로 이동합니다');
-                    
-                    // 디버그 정보 표시
-                    if (typeof showDebugMessage === 'function') {
-                        showDebugMessage('로그인 성공! 세션 및 사용자 정보 저장됨');
-                    }
-                    
-                    setTimeout(() => {
-                        // 쿼리 파라미터에 타임스탬프 추가 (캐시 방지)
-                        const timestamp = new Date().getTime();
-                        window.location.href = `./dashboard.html?t=${timestamp}`;
-                    }, 500);
-                } catch (error) {
-                    console.error('로그인 오류:', error);
-                    this.showError(error.message || '로그인에 실패했습니다.');
-                } finally {
-                    const submitButton = this.form.querySelector('button[type="submit"]');
-                    submitButton.disabled = false;
-                    submitButton.textContent = '로그인';
+                  localStorage.setItem('session', JSON.stringify(loginResult.session));
+                  console.log('세션 수동 저장 완료');
+                } catch (storageError) {
+                  console.error('세션 저장 오류:', storageError);
+                  this.showError('세션 정보를 저장할 수 없습니다. 브라우저 설정을 확인하세요.');
+                  submitButton.disabled = false;
+                  submitButton.textContent = '로그인';
+                  return;
                 }
+              }
+              
+              // 사용자 정보도 확인
+              if (loginResult.user) {
+                try {
+                  localStorage.setItem('user', JSON.stringify(loginResult.user));
+                  console.log('사용자 정보 저장 완료');
+                } catch (userError) {
+                  console.warn('사용자 정보 저장 실패:', userError);
+                }
+              }
+              
+              console.log('로그인 성공, 대시보드로 이동합니다');
+              
+              // 디버그 정보 표시
+              if (typeof showDebugMessage === 'function') {
+                showDebugMessage('로그인 성공! 세션 및 사용자 정보 저장됨');
+              }
+              
+              setTimeout(() => {
+                // 쿼리 파라미터에 타임스탬프 추가 (캐시 방지)
+                const timestamp = new Date().getTime();
+                window.location.href = `./dashboard.html?t=${timestamp}`;
+              }, 500);
+            } catch (error) {
+              console.error('로그인 오류:', error);
+              this.showError(error.message || '로그인에 실패했습니다.');
+            } finally {
+              const submitButton = this.form.querySelector('button[type="submit"]');
+              submitButton.disabled = false;
+              submitButton.textContent = '로그인';
             }
+          }
+          
+          // 테스트 계정 체크 함수 추가
+          isTestAccount(email) {
+            const testDomains = ['test.com', 'test.test', 'example.com'];
+            const testEmails = ['testadmin@example.com', 'tomatocup1@gmail.com', 'test@test.com'];
+            
+            return testEmails.includes(email) || 
+                   email.includes('@test') || 
+                   testDomains.some(domain => email.endsWith(`@${domain}`));
+          }
         }
+      
         // 페이지 로드 시 LoginManager 초기화
         document.addEventListener('DOMContentLoaded', () => {
-            new LoginManager();
+          new LoginManager();
+          
+          // 화면이 먼저 로드된 후 API 테스트 도구 로드
+          setTimeout(() => {
+            // API 테스트 도구 표시 조건 설정
+            const showApiTester = localStorage.getItem('debug_mode') === 'true' || 
+                                new URLSearchParams(window.location.search).has('debug');
+                                
+            // 테스트 도구 표시가 활성화된 경우에만 로드
+            if (showApiTester) {
+              const apiTester = document.getElementById('api-connection-tester');
+              if (apiTester) {
+                apiTester.style.display = 'block';
+              }
+            }
+          }, 500);
         });
-    </script>
+      </script>
+
     <script>
         // 디버깅 메시지 표시 유틸리티
         function showDebugMessage(message) {
@@ -559,7 +587,8 @@
                     `${window.location.origin}/.netlify/functions/signin`,
                     `${window.location.origin}/api/signin`,
                     `${window.location.origin}/api/login`,
-                    `${window.location.origin}/api/auth/signin`
+                    `${window.location.origin}/api/auth/signin`,
+                    'https://api.wealthfm.co.kr/auth/signin'
                 ];
                 
                 const results = [];
@@ -586,88 +615,338 @@
         });
     </script>
     
+    <!-- API 연결 테스트 도구 -->
+    <div id="api-connection-tester" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px 15px; border-radius: 5px; font-size: 12px; z-index: 10000; max-width: 450px; max-height: 80vh; overflow-y: auto; display: none;">
+      <h4 style="margin: 0 0 10px 0;">API 연결 테스트</h4>
+      <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px;">
+        <button id="test-direct-api" style="background: #4CAF50; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">직접 API 서버</button>
+        <button id="test-netlify-api" style="background: #2196F3; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">Netlify Functions</button>
+        <button id="test-cors" style="background: #FF9800; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">CORS 테스트</button>
+        <button id="toggle-debug-mode" style="background: #9C27B0; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer;">디버그 모드</button>
+      </div>
+      
+      <div id="api-test-form" style="display: none; margin-bottom: 10px;">
+        <div style="margin-bottom: 5px;">
+          <label for="api-url" style="display: block; margin-bottom: 3px;">API URL:</label>
+          <input id="api-url" type="text" value="https://api.wealthfm.co.kr/auth/signin" style="width: 100%; padding: 5px; box-sizing: border-box;">
+        </div>
+        <div style="margin-bottom: 5px;">
+          <label for="api-email" style="display: block; margin-bottom: 3px;">이메일:</label>
+          <input id="api-email" type="text" value="test@test.com" style="width: 100%; padding: 5px; box-sizing: border-box;">
+        </div>
+        <div style="margin-bottom: 5px;">
+          <label for="api-password" style="display: block; margin-bottom: 3px;">비밀번호:</label>
+          <input id="api-password" type="password" value="test123" style="width: 100%; padding: 5px; box-sizing: border-box;">
+        </div>
+        <button id="send-api-request" style="background: #4CAF50; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; width: 100%;">요청 전송</button>
+      </div>
+      
+      <div id="connection-results" style="font-family: monospace; font-size: 11px; margin-top: 10px; white-space: pre-wrap; max-height: 300px; overflow-y: auto; border-top: 1px solid #555; padding-top: 10px;"></div>
+      
+      <div style="margin-top: 10px; text-align: right;">
+        <button id="hide-tester" style="background: #555; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer; font-size: 10px;">숨기기</button>
+      </div>
+    </div>
+    
+    <script>
+      // 페이지 로드 후 실행
+      document.addEventListener('DOMContentLoaded', () => {
+        // API 테스트 도구 요소 참조
+        const apiTester = document.getElementById('api-connection-tester');
+        const testDirectApiBtn = document.getElementById('test-direct-api');
+        const testNetlifyApiBtn = document.getElementById('test-netlify-api');
+        const testCorsBtn = document.getElementById('test-cors');
+        const toggleDebugModeBtn = document.getElementById('toggle-debug-mode');
+        const apiTestForm = document.getElementById('api-test-form');
+        const sendApiRequestBtn = document.getElementById('send-api-request');
+        const resultsContainer = document.getElementById('connection-results');
+        const hideTesterBtn = document.getElementById('hide-tester');
+        
+        // 테스터 숨기기 버튼
+        hideTesterBtn.addEventListener('click', () => {
+          apiTester.style.display = 'none';
+          // 30초 후 다시 표시 (실수로 숨긴 경우를 위해)
+          setTimeout(() => {
+            apiTester.style.display = 'block';
+          }, 30000);
+        });
+        
+        // 직접 API 서버 테스트
+        testDirectApiBtn.addEventListener('click', async () => {
+          resultsContainer.textContent = '직접 API 서버 연결 테스트 중...';
+          
+          try {
+            const apiUrls = [
+              'https://api.wealthfm.co.kr/health',
+              'https://api.wealthfm.co.kr/auth/health',
+              'https://app.wealthfm.co.kr/api/health',
+              'https://wealthfm.co.kr/api/health'
+            ];
+            
+            const results = [];
+            
+            for (const url of apiUrls) {
+              try {
+                const startTime = Date.now();
+                const timeoutPromise = new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('요청 시간 초과 (5초)')), 5000)
+                );
+                
+                const fetchPromise = fetch(url, {
+                  method: 'GET',
+                  headers: {
+                    'Accept': 'application/json'
+                  }
+                });
+                
+                // 5초 타임아웃 설정
+                const response = await Promise.race([fetchPromise, timeoutPromise]);
+                const elapsed = Date.now() - startTime;
+                
+                results.push(`${url}: ${response.status} (${elapsed}ms)`);
+                
+                // 응답 본문이 있으면 표시
+                try {
+                  const text = await response.text();
+                  if (text.trim()) {
+                    results.push(`  응답: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
+                  }
+                } catch (e) {
+                  results.push(`  응답 읽기 실패: ${e.message}`);
+                }
+              } catch (error) {
+                results.push(`${url}: 오류 - ${error.message}`);
+              }
+            }
+            
+            resultsContainer.textContent = results.join('\n');
+          } catch (error) {
+            resultsContainer.textContent = `테스트 중 오류 발생: ${error.message}`;
+          }
+        });
+        
+        // Netlify Functions 테스트
+        testNetlifyApiBtn.addEventListener('click', async () => {
+          resultsContainer.textContent = 'Netlify Functions 연결 테스트 중...';
+          
+          try {
+            const apiUrls = [
+              `${window.location.origin}/.netlify/functions/env-check`,
+              `${window.location.origin}/.netlify/functions/health`,
+              `${window.location.origin}/api/env-check`,
+              `${window.location.origin}/api/health`
+            ];
+            
+            const results = [];
+            
+            for (const url of apiUrls) {
+              try {
+                const startTime = Date.now();
+                const timeoutPromise = new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('요청 시간 초과 (5초)')), 5000)
+                );
+                
+                const fetchPromise = fetch(url, {
+                  method: 'GET',
+                  headers: {
+                    'Accept': 'application/json'
+                  }
+                });
+                
+                // 5초 타임아웃 설정
+                const response = await Promise.race([fetchPromise, timeoutPromise]);
+                const elapsed = Date.now() - startTime;
+                
+                results.push(`${url}: ${response.status} (${elapsed}ms)`);
+                
+                // 응답 본문이 있으면 표시
+                try {
+                  const text = await response.text();
+                  if (text.trim()) {
+                    results.push(`  응답: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
+                  }
+                } catch (e) {
+                  results.push(`  응답 읽기 실패: ${e.message}`);
+                }
+              } catch (error) {
+                results.push(`${url}: 오류 - ${error.message}`);
+              }
+            }
+            
+            resultsContainer.textContent = results.join('\n');
+          } catch (error) {
+            resultsContainer.textContent = `테스트 중 오류 발생: ${error.message}`;
+          }
+        });
+        
+        // CORS 테스트
+        testCorsBtn.addEventListener('click', async () => {
+          resultsContainer.textContent = 'CORS 테스트 중...';
+          
+          try {
+            const apiUrls = [
+              'https://api.wealthfm.co.kr/auth/signin',
+              `${window.location.origin}/.netlify/functions/signin`,
+              `${window.location.origin}/api/signin`
+            ];
+            
+            const results = [];
+            
+            for (const url of apiUrls) {
+              try {
+                const startTime = Date.now();
+                const corsResponse = await fetch(url, {
+                  method: 'OPTIONS',
+                  headers: {
+                    'Accept': 'application/json',
+                    'Access-Control-Request-Method': 'POST',
+                    'Access-Control-Request-Headers': 'Content-Type, Authorization',
+                    'Origin': window.location.origin
+                  }
+                });
+                
+                const elapsed = Date.now() - startTime;
+                
+                // CORS 헤더 확인
+                const allowOrigin = corsResponse.headers.get('Access-Control-Allow-Origin');
+                const allowMethods = corsResponse.headers.get('Access-Control-Allow-Methods');
+                const allowHeaders = corsResponse.headers.get('Access-Control-Allow-Headers');
+                
+                results.push(`${url}: ${corsResponse.status} (${elapsed}ms)`);
+                results.push(`  Allow-Origin: ${allowOrigin || 'none'}`);
+                results.push(`  Allow-Methods: ${allowMethods || 'none'}`);
+                results.push(`  Allow-Headers: ${allowHeaders || 'none'}`);
+              } catch (error) {
+                results.push(`${url}: CORS 오류 - ${error.message}`);
+              }
+            }
+            
+            resultsContainer.textContent = results.join('\n');
+          } catch (error) {
+            resultsContainer.textContent = `테스트 중 오류 발생: ${error.message}`;
+          }
+        });
+        
+        // 디버그 모드 토글
+        toggleDebugModeBtn.addEventListener('click', () => {
+          apiTestForm.style.display = apiTestForm.style.display === 'none' ? 'block' : 'none';
+          
+          if (apiTestForm.style.display === 'block') {
+            toggleDebugModeBtn.textContent = '기본 모드';
+          } else {
+            toggleDebugModeBtn.textContent = '디버그 모드';
+          }
+        });
+        
+        // API 요청 전송
+        sendApiRequestBtn.addEventListener('click', async () => {
+          const apiUrl = document.getElementById('api-url').value;
+          const email = document.getElementById('api-email').value;
+          const password = document.getElementById('api-password').value;
+          
+          if (!apiUrl || !email || !password) {
+            resultsContainer.textContent = '모든 필드를 입력해주세요.';
+            return;
+          }
+          
+          resultsContainer.textContent = `${apiUrl} 로그인 요청 전송 중...`;
+          
+          try {
+            const startTime = Date.now();
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('요청 시간 초과 (10초)')), 10000)
+            );
+            
+            const fetchPromise = fetch(apiUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Origin': window.location.origin
+              },
+              credentials: 'include',
+              body: JSON.stringify({ email, password })
+            });
+            
+            // 10초 타임아웃 설정
+            const response = await Promise.race([fetchPromise, timeoutPromise]);
+            const elapsed = Date.now() - startTime;
+            
+            const results = [`API 응답: ${response.status} (${elapsed}ms)`];
+            
+            // 응답 헤더 출력
+            results.push('응답 헤더:');
+            response.headers.forEach((value, key) => {
+              results.push(`  ${key}: ${value}`);
+            });
+            
+            // 응답 본문이 있으면 출력
+            try {
+              const text = await response.text();
+              results.push('응답 본문:');
+              if (text.trim()) {
+                try {
+                  const json = JSON.parse(text);
+                  results.push(`  ${JSON.stringify(json, null, 2).replace(/\n/g, '\n  ')}`);
+                } catch (e) {
+                  results.push(`  ${text}`);
+                }
+              } else {
+                results.push('  (응답 본문 없음)');
+              }
+            } catch (e) {
+              results.push(`응답 본문 읽기 실패: ${e.message}`);
+            }
+            
+            resultsContainer.textContent = results.join('\n');
+          } catch (error) {
+            resultsContainer.textContent = `API 요청 중 오류 발생: ${error.message}`;
+          }
+        });
+      });
+    </script>
+    
     <!-- 디버그 모드 스크립트 -->
     <script>
-        // 로그인 페이지 하단에 추가
-        const debugMode = localStorage.getItem('debug_mode') === 'true';
-        if (debugMode) {
-            const debugPanel = document.createElement('div');
-            debugPanel.style.cssText = `
-                position: fixed;
-                bottom: 40px;
-                left: 0;
-                right: 0;
-                padding: 15px;
-                background: rgba(0,0,0,0.8);
-                color: white;
-                font-family: monospace;
-                font-size: 12px;
-                max-height: 200px;
-                overflow-y: auto;
-                z-index: 10000;
-            `;
-            
-            debugPanel.innerHTML = `
-                <h4>로그인 디버그 메뉴</h4>
-                <div>
-                    <button id="toggle-test-mode">테스트 모드 ${debugMode ? '끄기' : '켜기'}</button>
-                    <button id="direct-login-test">직접 API 호출 테스트</button>
-                    <button id="check-cors">CORS 설정 확인</button>
-                </div>
-                <div id="debug-output" style="margin-top: 10px;"></div>
-            `;
-            
-            document.body.appendChild(debugPanel);
-            
-            document.getElementById('toggle-test-mode').addEventListener('click', () => {
-                const newMode = localStorage.getItem('debug_mode') !== 'true';
-                localStorage.setItem('debug_mode', newMode);
-                document.getElementById('debug-output').textContent = `테스트 모드 ${newMode ? '활성화' : '비활성화'} 됨. 페이지를 새로고침하세요.`;
-            });
-            
-            document.getElementById('direct-login-test').addEventListener('click', async () => {
-                const output = document.getElementById('debug-output');
-                output.textContent = '로그인 API 직접 호출 테스트 중...';
-                
-                try {
-                    const response = await fetch(`${window.location.origin}/.netlify/functions/signin`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ email: 'test@test.com', password: 'test123' })
-                    });
-                    
-                    output.textContent = `응답 상태: ${response.status}`;
-                    try {
-                        const text = await response.text();
-                        output.textContent += `\n응답 내용: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`;
-                    } catch (e) {
-                        output.textContent += '\n응답 내용을 읽을 수 없습니다.';
-                    }
-                } catch (error) {
-                    output.textContent = `API 호출 오류: ${error.message}`;
-                }
-            });
-            
-            document.getElementById('check-cors').addEventListener('click', async () => {
-                const output = document.getElementById('debug-output');
-                output.textContent = 'CORS 설정 확인 중...';
-                
-                try {
-                    const response = await fetch(`${window.location.origin}/.netlify/functions/env-check`, {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                    
-                    output.textContent = `CORS 확인 - 응답 상태: ${response.status}`;
-                } catch (error) {
-                    output.textContent = `CORS 오류: ${error.message}`;
-                }
-            });
+      // 디버그 모드 설정
+      (function() {
+        // URL에서 디버그 모드 확인
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('debug')) {
+          localStorage.setItem('debug_mode', 'true');
         }
+        
+        // 디버그 모드 활성화 여부
+        const debugMode = localStorage.getItem('debug_mode') === 'true';
+        
+        // 디버그 모드 활성화 시 로그인 테스트 버튼 추가
+        if (debugMode) {
+          const loginForm = document.getElementById('loginForm');
+          if (loginForm) {
+            const testLoginBtn = document.createElement('button');
+            testLoginBtn.type = 'button';
+            testLoginBtn.className = 'btn';
+            testLoginBtn.style.marginTop = '10px';
+            testLoginBtn.style.backgroundColor = '#FF9800';
+            testLoginBtn.style.color = 'white';
+            testLoginBtn.textContent = '테스트 계정으로 로그인';
+            
+            testLoginBtn.addEventListener('click', () => {
+              document.getElementById('email').value = 'test@test.com';
+              document.getElementById('password').value = 'test123';
+              
+              // 테스트 모드 활성화 (authService에서 사용)
+              window.enableLoginTestMode = true;
+              
+              // 폼 제출
+              const submitEvent = new Event('submit');
+              loginForm.dispatchEvent(submitEvent);
+            });
+            
+            loginForm.appendChild(testLoginBtn);
+          }
+        }
+      })();
     </script>
 </body>
 </html>
