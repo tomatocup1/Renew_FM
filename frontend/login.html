@@ -534,5 +534,42 @@
       }, 1000);
     })();
     </script>
+    <!-- 디버깅용 API 테스트 도구 -->
+<div id="api-test-tools" style="position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; border-radius: 5px; font-size: 12px; z-index: 9999;">
+    <h4>API 테스트</h4>
+    <button id="test-env-btn">환경변수 확인</button>
+    <button id="test-stores-btn">매장 데이터 확인</button>
+    <div id="api-test-result" style="margin-top: 10px; max-height: 200px; overflow: auto; word-wrap: break-word;"></div>
+  </div>
+  
+  <script>
+    document.getElementById('test-env-btn').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/.netlify/functions/env-check');
+        const data = await response.json();
+        document.getElementById('api-test-result').textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        document.getElementById('api-test-result').textContent = 'Error: ' + error.message;
+      }
+    });
+  
+    document.getElementById('test-stores-btn').addEventListener('click', async () => {
+      try {
+        const authHeader = localStorage.getItem('session') ? 
+          `Bearer ${JSON.parse(localStorage.getItem('session')).access_token}` : '';
+        
+        const response = await fetch('/.netlify/functions/stores-user-platform', {
+          headers: {
+            'Authorization': authHeader
+          }
+        });
+        
+        const data = await response.json();
+        document.getElementById('api-test-result').textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        document.getElementById('api-test-result').textContent = 'Error: ' + error.message;
+      }
+    });
+  </script>
 </body>
 </html>

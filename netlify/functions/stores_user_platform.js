@@ -11,57 +11,75 @@ exports.handler = async (event, context) => {
     const authHeader = event.headers.authorization || event.headers.Authorization || '';
     console.log('Authorization header:', authHeader.substring(0, 20) + '...');
     
-    // 먼저 Supabase 연결 테스트 추가
+    // Supabase 연결 테스트
     try {
       console.log('Supabase 연결 테스트 시작');
       console.log('Supabase URL:', process.env.SUPABASE_URL ? '설정됨' : '없음');
       console.log('Supabase Key:', process.env.SUPABASE_SERVICE_KEY ? '설정됨' : '없음');
       
-      // 간단한 쿼리로 연결 테스트
       const testResult = await supabase.from('users').select('count').limit(1);
       console.log('Supabase 연결 테스트 결과:', testResult.error ? '실패' : '성공');
       if (testResult.error) {
         console.error('Supabase 연결 오류:', testResult.error.message);
+        return {
+          statusCode: 500,
+          headers: corsHeaders,
+          body: JSON.stringify({ 
+            error: 'Supabase 연결에 실패했습니다.', 
+            details: testResult.error.message 
+          })
+        };
       }
     } catch (connectionError) {
       console.error('Supabase 연결 테스트 예외:', connectionError.message);
+      return {
+        statusCode: 500,
+        headers: corsHeaders,
+        body: JSON.stringify({ 
+          error: 'Supabase 연결 테스트 중 오류가 발생했습니다.', 
+          details: connectionError.message 
+        })
+      };
     }
     
-    // 임시 세션인 경우에도 DB 데이터 조회 시도
+    // 토큰 추출 및 검증
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('유효한 인증 토큰 없음');
+      return {
+        statusCode: 401,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: '인증이 필요합니다.' })
+      };
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    
+    // 사용자 인증 확인
     let userId = null;
-    
-    // 템유저 ID 생성 (테스트용)
-    const tempUserId = process.env.DEFAULT_USER_ID || 'test-user';
-    
-    if (!authHeader || authHeader.includes('temporary-') || authHeader.includes('temp-acces')) {
-      console.log('임시 인증으로 처리, 기본 사용자 사용');
-      userId = tempUserId;
-    } else {
-      // 실제 토큰에서 사용자 정보 가져오기
-      const token = authHeader.replace('Bearer ', '');
+    try {
+      const { data, error } = await supabase.auth.getUser(token);
       
-      if (!token) {
-        console.log('토큰 없음, 기본 사용자 사용');
-        userId = tempUserId;
-      } else {
-        try {
-          const { data, error } = await supabase.auth.getUser(token);
-          
-          if (error || !data.user) {
-            console.log('토큰 검증 실패, 기본 사용자 사용');
-            userId = tempUserId;
-          } else {
-            userId = data.user.id;
-            console.log('인증된 사용자:', userId);
-          }
-        } catch (authError) {
-          console.log('인증 프로세스 실패, 기본 사용자 사용:', authError.message);
-          userId = tempUserId;
-        }
+      if (error || !data.user) {
+        console.log('토큰 검증 실패');
+        return {
+          statusCode: 401,
+          headers: corsHeaders,
+          body: JSON.stringify({ error: '유효하지 않은 인증 정보입니다.' })
+        };
       }
+      
+      userId = data.user.id;
+      console.log('인증된 사용자:', userId);
+    } catch (authError) {
+      console.log('인증 프로세스 실패:', authError.message);
+      return {
+        statusCode: 401,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: '인증 처리 중 오류가 발생했습니다.' })
+      };
     }
     
-    // Supabase에서 사용자 역할 조회 시도
+    // Supabase에서 사용자 역할 조회
     let userRole = '일반사용자';
     try {
       const { data: userData, error: userError } = await supabase
@@ -70,17 +88,27 @@ exports.handler = async (event, context) => {
         .eq('id', userId)
         .single();
       
-      if (!userError && userData) {
-        userRole = userData.role;
-        console.log('사용자 역할:', userRole);
-      } else {
-        console.log('사용자 역할 조회 실패, 기본 역할 사용');
+      if (userError) {
+        console.log('사용자 역할 조회 실패:', userError.message);
+        return {
+          statusCode: 500,
+          headers: corsHeaders,
+          body: JSON.stringify({ error: '사용자 정보를 조회할 수 없습니다.' })
+        };
       }
+      
+      userRole = userData.role;
+      console.log('사용자 역할:', userRole);
     } catch (roleError) {
       console.log('역할 조회 중 오류:', roleError.message);
+      return {
+        statusCode: 500,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: '사용자 역할 조회 중 오류가 발생했습니다.' })
+      };
     }
     
-    // 실제 매장 데이터 조회
+    // 매장 데이터 조회
     let stores = [];
     
     try {
@@ -92,12 +120,17 @@ exports.handler = async (event, context) => {
           .order('store_code')
           .order('platform');
         
-        if (!error && data) {
-          stores = data;
-          console.log(`${stores.length}개 매장 조회됨`);
-        } else {
-          console.log('매장 조회 실패:', error?.message);
+        if (error) {
+          console.log('매장 조회 실패:', error.message);
+          return {
+            statusCode: 500,
+            headers: corsHeaders,
+            body: JSON.stringify({ error: '매장 데이터 조회 중 오류가 발생했습니다.' })
+          };
         }
+        
+        stores = data || [];
+        console.log(`${stores.length}개 매장 조회됨`);
       } else {
         console.log('일반 사용자 권한으로 할당된 매장만 조회');
         const { data: assignments, error: assignError } = await supabase
@@ -105,42 +138,68 @@ exports.handler = async (event, context) => {
           .select('store_code')
           .eq('user_id', userId);
         
-        if (!assignError && assignments && assignments.length > 0) {
-          const storeCodes = assignments.map(a => a.store_code);
-          console.log('할당된 매장 코드:', storeCodes);
-          
-          const { data, error } = await supabase
-            .from('platform_reply_rules')
-            .select('store_code, store_name, platform, platform_code')
-            .in('store_code', storeCodes)
-            .order('store_code')
-            .order('platform');
-          
-          if (!error && data) {
-            stores = data;
-            console.log(`${stores.length}개 매장 조회됨`);
-          } else {
-            console.log('매장 상세 조회 실패:', error?.message);
-          }
-        } else {
-          console.log('할당된 매장 없음 또는 조회 실패');
+        if (assignError) {
+          console.log('매장 할당 조회 실패:', assignError.message);
+          return {
+            statusCode: 500,
+            headers: corsHeaders,
+            body: JSON.stringify({ error: '매장 할당 정보 조회 중 오류가 발생했습니다.' })
+          };
         }
+        
+        if (!assignments || assignments.length === 0) {
+          console.log('할당된 매장 없음');
+          return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify([])
+          };
+        }
+        
+        const storeCodes = assignments.map(a => a.store_code);
+        console.log('할당된 매장 코드:', storeCodes);
+        
+        const { data, error } = await supabase
+          .from('platform_reply_rules')
+          .select('store_code, store_name, platform, platform_code')
+          .in('store_code', storeCodes)
+          .order('store_code')
+          .order('platform');
+        
+        if (error) {
+          console.log('매장 상세 조회 실패:', error.message);
+          return {
+            statusCode: 500,
+            headers: corsHeaders,
+            body: JSON.stringify({ error: '매장 정보 조회 중 오류가 발생했습니다.' })
+          };
+        }
+        
+        stores = data || [];
+        console.log(`${stores.length}개 매장 조회됨`);
       }
     } catch (storeError) {
       console.log('매장 조회 중 오류:', storeError.message);
+      return {
+        statusCode: 500,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: '매장 데이터 조회 중 오류가 발생했습니다.' })
+      };
     }
     
-    // 매장 데이터가 없으면 테스트 데이터로 대체
+    // 매장 데이터가 없는 경우
     if (stores.length === 0) {
       console.log('매장 데이터 없음');
       return {
         statusCode: 404,
         headers: corsHeaders,
-        body: JSON.stringify({ error: '매장 데이터가 없습니다. 관리자에게 문의하세요.' })
+        body: JSON.stringify({ 
+          error: '매장 데이터가 없습니다.', 
+          message: '매장 데이터가 없습니다. 관리자에게 문의하세요.' 
+        })
       };
     }
     
-    // 테스트 데이터 대신 실제 데이터만 반환
     return {
       statusCode: 200,
       headers: corsHeaders,
@@ -152,7 +211,7 @@ exports.handler = async (event, context) => {
     return {
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: '서버 오류가 발생했습니다.' })
+      body: JSON.stringify({ error: '서버 오류가 발생했습니다.', details: error.message })
     };
   }
 };

@@ -56,6 +56,32 @@ exports.handler = async (event, context) => {
       };
     }
 
+    // Supabase 연결 테스트
+    try {
+      const testResult = await supabase.from('users').select('count').limit(1);
+      if (testResult.error) {
+        console.error('Supabase 연결 테스트 실패:', testResult.error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ 
+            error: 'Supabase 연결에 실패했습니다.',
+            details: testResult.error.message
+          })
+        };
+      }
+    } catch (testError) {
+      console.error('Supabase 연결 테스트 예외:', testError);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Supabase 연결 테스트 중 오류가 발생했습니다.',
+          details: testError.message
+        })
+      };
+    }
+
     // Supabase를 사용한 토큰 새로고침
     try {
       const { data, error } = await supabase.auth.refreshSession({
@@ -67,7 +93,15 @@ exports.handler = async (event, context) => {
         return {
           statusCode: 401,
           headers,
-          body: JSON.stringify({ error: '토큰 갱신에 실패했습니다.' })
+          body: JSON.stringify({ error: '토큰 갱신에 실패했습니다.', details: error.message })
+        };
+      }
+
+      if (!data.session) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ error: '세션 정보를 가져오는데 실패했습니다.' })
         };
       }
 
@@ -81,7 +115,7 @@ exports.handler = async (event, context) => {
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: '토큰 갱신 중 오류가 발생했습니다.' })
+        body: JSON.stringify({ error: '토큰 갱신 중 오류가 발생했습니다.', details: authError.message })
       };
     }
   } catch (error) {
@@ -89,7 +123,7 @@ exports.handler = async (event, context) => {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: '서버 오류가 발생했습니다.' })
+      body: JSON.stringify({ error: '서버 오류가 발생했습니다.', details: error.message })
     };
   }
 };

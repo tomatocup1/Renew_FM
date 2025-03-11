@@ -45,6 +45,32 @@ exports.handler = async (event, context) => {
     }
     
     const token = authHeader.replace('Bearer ', '');
+    
+    // Supabase 연결 테스트
+    try {
+      const testResult = await supabase.from('users').select('count').limit(1);
+      if (testResult.error) {
+        console.error('Supabase 연결 테스트 실패:', testResult.error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ 
+            error: 'Supabase 연결에 실패했습니다.',
+            details: testResult.error.message
+          })
+        };
+      }
+    } catch (testError) {
+      console.error('Supabase 연결 테스트 예외:', testError);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Supabase 연결 테스트 중 오류가 발생했습니다.',
+          details: testError.message
+        })
+      };
+    }
 
     // Supabase를 사용한 사용자 정보 조회
     try {
@@ -69,7 +95,11 @@ exports.handler = async (event, context) => {
 
       if (getUserError) {
         console.error('User data fetch error:', getUserError);
-        // 사용자 정보 조회 실패 시에도 기본 정보 반환
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ error: '사용자 정보 조회 실패', details: getUserError.message })
+        };
       }
 
       // 응답 데이터 구성
