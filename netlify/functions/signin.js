@@ -75,34 +75,22 @@ exports.handler = async (event, context) => {
     try {
       // 먼저 Supabase 연결 확인
       try {
-        await supabase.from('users').select('count').limit(1);
-      } catch (connectionErr) {
-        console.error('Supabase connection error:', connectionErr);
-        
-        // 연결 오류 발생 시 테스트 데이터 반환
-        if (email === 'testadmin@example.com' || email === 'tomatocup1@gmail.com') {
-          const now = new Date();
-          const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2시간 후 만료
-          
-          // 테스트 응답 반환
+        const connectionTest = await supabase.from('users').select('count').limit(1);
+        if (connectionTest.error) {
+          console.error('Supabase connection error:', connectionTest.error);
           return {
-            statusCode: 200,
+            statusCode: 500,
             headers,
-            body: JSON.stringify({
-              session: {
-                access_token: `test-token-${Date.now()}`,
-                refresh_token: `test-refresh-${Date.now()}`,
-                expires_at: expiresAt.toISOString()
-              },
-              user: {
-                id: 'test-user-id',
-                email: email,
-                role: '운영자',
-                name: email.split('@')[0]
-              }
-            })
+            body: JSON.stringify({ error: 'Supabase 연결에 실패했습니다. 잠시 후 다시 시도해주세요.' })
           };
         }
+      } catch (connectionErr) {
+        console.error('Supabase connection error:', connectionErr);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ error: '데이터베이스 연결에 실패했습니다. 잠시 후 다시 시도해주세요.' })
+        };
       }
       
       // Supabase 로그인 시도
@@ -113,32 +101,6 @@ exports.handler = async (event, context) => {
 
       if (error) {
         console.error('Login error:', error);
-        
-        // 테스트 계정 체크
-        if (email === 'testadmin@example.com' || email === 'tomatocup1@gmail.com') {
-          const now = new Date();
-          const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2시간 후 만료
-          
-          // 테스트 응답 반환
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-              session: {
-                access_token: `test-token-${Date.now()}`,
-                refresh_token: `test-refresh-${Date.now()}`,
-                expires_at: expiresAt.toISOString()
-              },
-              user: {
-                id: 'test-user-id',
-                email: email,
-                role: '운영자',
-                name: email.split('@')[0]
-              }
-            })
-          };
-        }
-        
         // 로그인 실패 응답
         return {
           statusCode: 401,
@@ -181,70 +143,17 @@ exports.handler = async (event, context) => {
       };
     } catch (authError) {
       console.error('Auth operation error:', authError);
-      
-      // 테스트 계정 체크
-      if (email === 'testadmin@example.com' || email === 'tomatocup1@gmail.com') {
-        const now = new Date();
-        const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2시간 후 만료
-        
-        // 테스트 응답 반환
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            session: {
-              access_token: `test-token-${Date.now()}`,
-              refresh_token: `test-refresh-${Date.now()}`,
-              expires_at: expiresAt.toISOString()
-            },
-            user: {
-              id: 'test-user-id',
-              email: email,
-              role: '운영자',
-              name: email.split('@')[0]
-            }
-          })
-        };
-      }
-      
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: '로그인 처리 중 오류가 발생했습니다.' })
+        body: JSON.stringify({ 
+          error: '로그인 처리 중 오류가 발생했습니다.',
+          details: authError.message
+        })
       };
     }
   } catch (error) {
     console.error('Signin function error:', error);
-    
-    // 임시 테스트 응답 (개발용)
-    if (event.body) {
-      try {
-        const body = JSON.parse(event.body);
-        if (body.email === 'testadmin@example.com' || body.email === 'tomatocup1@gmail.com') {
-          const now = new Date();
-          const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2시간 후 만료
-          
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-              session: {
-                access_token: `test-token-${Date.now()}`,
-                refresh_token: `test-refresh-${Date.now()}`,
-                expires_at: expiresAt.toISOString()
-              },
-              user: {
-                id: 'test-user-id',
-                email: body.email,
-                role: '운영자',
-                name: body.email.split('@')[0]
-              }
-            })
-          };
-        }
-      } catch (e) {}
-    }
-    
     return {
       statusCode: 500,
       headers,

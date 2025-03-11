@@ -90,39 +90,6 @@ class AuthService {
         
         // 응답 확인 및 처리
         if (!response.ok) {
-          // 테스트 계정으로 로그인 시도 (백엔드 연결 실패 시)
-          if (email === "testadmin@example.com" || email === "tomatocup1@gmail.com") {
-            console.log('테스트 계정으로 시도');
-            
-            const now = new Date();
-            const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2시간 후 만료
-            
-            const testSession = {
-              access_token: `test-token-${Date.now()}`,
-              refresh_token: `test-refresh-${Date.now()}`,
-              expires_at: expiresAt.toISOString()
-            };
-            
-            const testUser = {
-              id: "test-user-id",
-              email: email,
-              role: "운영자",
-              name: email.split('@')[0]
-            };
-            
-            // 테스트 세션 및 사용자 정보 저장
-            this.setSession(testSession);
-            this.setUser(testUser);
-            
-            // 토큰 갱신 타이머 설정
-            await this.initTokenRefresh();
-            
-            return {
-              session: testSession,
-              user: testUser
-            };
-          }
-          
           throw new Error('로그인에 실패했습니다. 이메일과 비밀번호를 확인하세요.');
         }
         
@@ -306,25 +273,6 @@ class AuthService {
     
         console.log('토큰 갱신 시도');
         
-        // 테스트 토큰 확인 및 처리
-        if (session.refresh_token.startsWith('test-refresh-') || 
-            session.access_token.startsWith('test-token-')) {
-          console.log('테스트 토큰 감지, 새 테스트 세션 생성');
-          
-          const now = new Date();
-          const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2시간 후 만료
-          
-          const newSession = {
-            ...session,
-            access_token: `test-token-${Date.now()}`,
-            refresh_token: `test-refresh-${Date.now()}`,
-            expires_at: expiresAt.toISOString()
-          };
-          
-          this.setSession(newSession);
-          return newSession;
-        }
-        
         // API 요청
         const response = await fetch(`${this.API_URL}/refresh-token`, {
           method: 'POST',
@@ -342,17 +290,8 @@ class AuthService {
         
         // 응답 처리
         if (!response.ok) {
-          console.warn('토큰 갱신 실패, 임시 세션 생성');
-          
-          // 임시 세션 생성
-          const tempSession = {
-            ...session,
-            access_token: `temp-token-${Date.now()}`,
-            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10분 연장
-          };
-          
-          this.setSession(tempSession);
-          return tempSession;
+          console.warn('토큰 갱신 실패');
+          return null;
         }
         
         // 성공 응답 처리
@@ -360,17 +299,8 @@ class AuthService {
           const data = await response.json();
           
           if (!data.session) {
-            console.warn('토큰 갱신 응답에 세션 정보 없음, 임시 세션 생성');
-            
-            // 세션 정보 없을 때 임시 세션 생성
-            const tempSession = {
-              ...session,
-              access_token: `temp-token-${Date.now()}`,
-              expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
-            };
-            
-            this.setSession(tempSession);
-            return tempSession;
+            console.warn('토큰 갱신 응답에 세션 정보 없음');
+            return null;
           }
           
           console.log('토큰 갱신 성공');
@@ -378,31 +308,10 @@ class AuthService {
           return data.session;
         } catch (jsonError) {
           console.error('토큰 갱신 응답 파싱 오류:', jsonError);
-          
-          // 파싱 오류 시 임시 세션 생성
-          const tempSession = {
-            ...session,
-            access_token: `temp-token-${Date.now()}`,
-            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
-          };
-          
-          this.setSession(tempSession);
-          return tempSession;
+          return null;
         }
       } catch (error) {
         console.error('토큰 갱신 처리 중 예외 발생:', error);
-        
-        // 오류 발생 시 현재 세션 연장
-        const session = this.getSession();
-        if (session) {
-          const extendedSession = {
-            ...session,
-            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
-          };
-          this.setSession(extendedSession);
-          return extendedSession;
-        }
-        
         return null;
       } finally {
         this.isRefreshing = false;
@@ -557,19 +466,6 @@ class AuthService {
         if (cachedUser) {
           return cachedUser;
         }
-        
-        // 테스트 토큰 확인
-        if (session.access_token.startsWith('test-token-')) {
-          console.log('테스트 토큰 감지, 기본 사용자 정보 반환');
-          const testUser = {
-            id: 'test-user-id',
-            email: 'testadmin@example.com',
-            role: '운영자',
-            name: 'Test Admin'
-          };
-          this.setUser(testUser);
-          return testUser;
-        }
     
         // 사용자 정보 API 호출 - 경로 수정: auth/user → auth-user
         try {
@@ -607,19 +503,6 @@ class AuthService {
           return data.user;
         } catch (apiError) {
           console.error('사용자 정보 API 호출 오류:', apiError);
-          
-          // API 오류 시 테스트 사용자 반환
-          if (session.access_token.includes('test') || session.access_token.includes('temp')) {
-            const fallbackUser = {
-              id: 'test-user-id',
-              email: 'testadmin@example.com',
-              role: '운영자',
-              name: 'Test Admin'
-            };
-            this.setUser(fallbackUser);
-            return fallbackUser;
-          }
-          
           return null;
         }
       } catch (error) {
@@ -667,7 +550,7 @@ class AuthService {
       }
     }
 
-      getSession() {
+    getSession() {
       try {
         // 주 저장소에서 세션 조회
         let sessionStr = localStorage.getItem('session');
@@ -740,14 +623,6 @@ class AuthService {
           return false;
         }
         
-        // 테스트 토큰 확인
-        if (session.access_token && 
-            (session.access_token.startsWith('test-token-') || 
-             session.access_token.startsWith('temp-token-'))) {
-          console.log('테스트 토큰 감지, 인증 상태 유효함');
-          return true;
-        }
-        
         // 토큰 만료 검사
         if (!session.access_token || !session.expires_at) {
           console.log('유효한 토큰 없음');
@@ -780,13 +655,6 @@ class AuthService {
         if (!session || !session.access_token) {
           console.log('인증 헤더 생성 불가: 토큰 없음');
           return '';
-        }
-        
-        // 테스트 토큰 감지
-        if (session.access_token.startsWith('test-token-') || 
-            session.access_token.startsWith('temp-token-')) {
-          console.log('테스트 토큰 헤더 생성');
-          return `Bearer ${session.access_token}`;
         }
         
         // 만료 시간 확인 및 필요시 갱신

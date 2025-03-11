@@ -27,7 +27,16 @@ exports.handler = async (event, context) => {
 
     console.log('통계 조회 요청:', { store_code, platform, start_date, end_date });
     
-    // 인증 토큰 검증 생략 - 리뷰 조회는 인증없이도 가능하도록 설정
+    // 인증 토큰 확인
+    const authHeader = event.headers.authorization || event.headers.Authorization;
+    if (!authHeader) {
+      console.log('Authorization 헤더 없음');
+      return {
+        statusCode: 401,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: '인증이 필요합니다.' })
+      };
+    }
     
     // 통계 데이터 조회
     let statsQuery = supabase
@@ -74,13 +83,57 @@ exports.handler = async (event, context) => {
     ]);
     
     console.log('조회 결과:', {
-      stats: statsResult.data?.length || 0,
+      stats: statsResult.data?.length || 0, 
       reviews: reviewsResult.data?.length || 0
     });
     
-    // DB에 데이터가 없으면 예시 데이터 제공
-    const stats = statsResult.data?.length > 0 ? statsResult.data : generateSampleStats(store_code);
-    const reviews = reviewsResult.data?.length > 0 ? reviewsResult.data : generateSampleReviews(store_code);
+    // 쿼리 오류 확인
+    if (statsResult.error) {
+      console.error('통계 데이터 조회 오류:', statsResult.error);
+      return {
+        statusCode: 500,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          error: '통계 데이터 조회 중 오류가 발생했습니다.',
+          details: statsResult.error.message
+        })
+      };
+    }
+    
+    if (reviewsResult.error) {
+      console.error('리뷰 데이터 조회 오류:', reviewsResult.error);
+      return {
+        statusCode: 500,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          error: '리뷰 데이터 조회 중 오류가 발생했습니다.',
+          details: reviewsResult.error.message
+        })
+      };
+    }
+    
+    // 데이터 빈 배열로 초기화 (null이 아닌 빈 배열로 처리)
+    const stats = statsResult.data || [];
+    const reviews = reviewsResult.data || [];
+    
+    // 데이터가 없는 경우
+    if (stats.length === 0 && reviews.length === 0) {
+      console.log('데이터가 없음');
+      return {
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          stats: [],
+          reviews: [],
+          meta: {
+            total_stats: 0,
+            total_reviews: 0,
+            needs_boss_reply: 0,
+            message: '해당 기간에 데이터가 없습니다.'
+          }
+        })
+      };
+    }
     
     // 응답 구성
     return {
@@ -109,69 +162,3 @@ exports.handler = async (event, context) => {
     };
   }
 };
-
-// 샘플 통계 데이터 생성
-function generateSampleStats(store_code) {
-  const today = new Date();
-  const stats = [];
-  
-  for (let i = 0; i < 7; i++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    
-    stats.push({
-      review_date: dateStr,
-      store_code: store_code,
-      total_reviews: Math.floor(Math.random() * 10) + 1,
-      rating_5_count: Math.floor(Math.random() * 5),
-      rating_4_count: Math.floor(Math.random() * 4),
-      rating_3_count: Math.floor(Math.random() * 3),
-      rating_2_count: Math.floor(Math.random() * 2),
-      rating_1_count: Math.floor(Math.random() * 1),
-      boss_reply_count: Math.floor(Math.random() * 3),
-      avg_rating: (4 + Math.random()).toFixed(2)
-    });
-  }
-  
-  return stats;
-}
-
-// 샘플 리뷰 데이터 생성
-function generateSampleReviews(store_code) {
-  const today = new Date();
-  const reviews = [];
-  const names = ['김고객', '이고객', '박고객', '최고객', '정고객'];
-  const contents = [
-    '음식이 정말 맛있어요. 배달도 빨라서 좋았습니다.',
-    '전체적으로 만족스러웠어요. 다음에 또 주문할게요.',
-    '음식은 괜찮았는데 배달이 좀 늦었어요.',
-    '항상 맛있게 먹고 있어요. 단골이 될게요!',
-    '맛있게 잘 먹었습니다. 양이 조금 더 많았으면 좋겠어요.'
-  ];
-  
-  for (let i = 0; i < 10; i++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - Math.floor(Math.random() * 7));
-    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    const timeStr = `${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}:00`;
-    
-    const rating = Math.floor(Math.random() * 5) + 1;
-    const nameIndex = Math.floor(Math.random() * names.length);
-    const contentIndex = Math.floor(Math.random() * contents.length);
-    
-    reviews.push({
-      id: i + 1,
-      store_code: store_code,
-      review_date: dateStr,
-      created_at: `${dateStr}T${timeStr}Z`,
-      rating: rating,
-      review_name: names[nameIndex],
-      review_content: contents[contentIndex],
-      boss_reply_needed: Math.random() > 0.5,
-      ai_response: '소중한 리뷰 감사합니다. 더 맛있는 음식으로 보답하겠습니다.'
-    });
-  }
-  
-  return reviews;
-}

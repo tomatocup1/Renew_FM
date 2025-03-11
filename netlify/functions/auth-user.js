@@ -45,25 +45,6 @@ exports.handler = async (event, context) => {
     }
     
     const token = authHeader.replace('Bearer ', '');
-    
-    // 테스트 토큰 확인 (개발용)
-    if (token.startsWith('test-token-')) {
-      console.log('Test token detected, returning test user data');
-      
-      // 테스트 사용자 정보 반환
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          user: {
-            id: 'test-user-id',
-            email: 'testadmin@example.com',
-            role: '운영자',
-            name: 'Test Admin'
-          }
-        })
-      };
-    }
 
     // Supabase를 사용한 사용자 정보 조회
     try {

@@ -132,29 +132,15 @@ exports.handler = async (event, context) => {
     
     // 매장 데이터가 없으면 테스트 데이터로 대체
     if (stores.length === 0) {
-      console.log('매장 데이터 없음, 테스트 데이터 사용');
-      stores = [
-        {
-          store_code: 'STORE001',
-          store_name: '테스트 매장 1',
-          platform: '배달의민족',
-          platform_code: ''
-        },
-        {
-          store_code: 'STORE002',
-          store_name: '테스트 매장 2',
-          platform: '요기요',
-          platform_code: 'YOG001'
-        },
-        {
-          store_code: 'STORE003',
-          store_name: '테스트 매장 3',
-          platform: '쿠팡이츠',
-          platform_code: 'CPE001'
-        }
-      ];
+      console.log('매장 데이터 없음');
+      return {
+        statusCode: 404,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: '매장 데이터가 없습니다. 관리자에게 문의하세요.' })
+      };
     }
     
+    // 테스트 데이터 대신 실제 데이터만 반환
     return {
       statusCode: 200,
       headers: corsHeaders,

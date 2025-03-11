@@ -291,8 +291,8 @@ async initializeStoreSelect() {
     
     // 먼저 인증 상태를 명시적으로 확인
     if (!await authService.isAuthenticated()) {
-      console.log('인증되지 않음, 테스트 데이터 사용');
-      this.useTestStoreData();
+      console.log('인증되지 않음');
+      window.location.href = '/login.html';
       return;
     }
     
@@ -303,13 +303,11 @@ async initializeStoreSelect() {
     const isAdmin = currentUser?.role === '운영자';
     console.log('운영자 권한 여부:', isAdmin);
 
-    // 간소화된 API 경로 - 단일 엔드포인트 사용
-    // 수정: 서버 URL 경로에 맞게 API 엔드포인트 수정
+    // API 엔드포인트
     const apiEndpoint = '/api/stores_user_platform';
     
     try {
       console.log(`API 요청 시작: ${apiEndpoint}`);
-      
       console.log('인증 헤더:', authService.getAuthHeader());
 
       const response = await fetch(apiEndpoint, {
@@ -323,7 +321,6 @@ async initializeStoreSelect() {
       });
       
       console.log(`API 응답 상태:`, response.status);
-      console.log('응답 헤더:', [...response.headers.entries()]);
       
       if (!response.ok) {
         throw new Error(`API 요청 실패: ${response.status}`);
@@ -355,14 +352,16 @@ async initializeStoreSelect() {
       
     } catch (error) {
       console.error('API 요청 중 오류 발생:', error.message);
-      console.log('테스트 데이터로 대체');
-      this.useTestStoreData(isAdmin);
+      this.showAlert('매장 정보를 불러오는데 실패했습니다. 네트워크 연결을 확인하세요.', 'error');
+      // 매장 선택 비활성화 및 빈 목록 표시
+      this.populateStoreSelectWithAllOption([]);
     }
     
   } catch (error) {
     console.error('매장 목록 초기화 중 오류:', error);
     this.showAlert('매장 정보를 불러오는데 실패했습니다.', 'error');
-    this.useTestStoreData();
+    // 매장 선택 비활성화 및 빈 목록 표시
+    this.populateStoreSelectWithAllOption([]);
   }
 }
 
@@ -386,58 +385,13 @@ formatStoreData(stores) {
 
 // 테스트 데이터 사용 함수
 useTestStoreData(isAdmin = false) {
-  console.log('테스트 매장 데이터 사용');
+  console.log('실제 매장 데이터를 가져오는데 실패했습니다');
   
-  let mockStores = [
-    {
-      store_code: 'STORE001',
-      platform: '배달의민족',
-      platform_code: 'BAE001',
-      store_name: '테스트 매장 1'
-    },
-    {
-      store_code: 'STORE002',
-      platform: '요기요',
-      platform_code: 'YOG001',
-      store_name: '테스트 매장 2'
-    },
-    {
-      store_code: 'STORE003',
-      platform: '쿠팡이츠',
-      platform_code: 'CPE001',
-      store_name: '테스트 매장 3'
-    }
-  ];
+  // 빈 데이터와 경고 표시
+  this.populateStoreSelectWithAllOption([]);
+  this.showAlert('서버에서 매장 정보를 가져오는데 실패했습니다. 잠시 후 다시 시도해주세요.', 'error');
   
-  // 운영자인 경우 추가 매장 데이터 제공
-  if (isAdmin) {
-    console.log('운영자용 확장 테스트 데이터 사용');
-    mockStores = mockStores.concat([
-      {
-        store_code: 'STORE004',
-        platform: '배달의민족',
-        platform_code: 'BAE002',
-        store_name: '테스트 매장 4'
-      },
-      {
-        store_code: 'STORE005',
-        platform: '요기요',
-        platform_code: 'YOG002',
-        store_name: '테스트 매장 5'
-      }
-    ]);
-  }
-  
-  // 테스트 데이터 저장 (나중에 API 호출에서 재사용하기 위해)
-  this.testStoresData = mockStores;
-  
-  // 포맷팅 및 표시
-  const formattedStores = this.formatStoreData(mockStores);
-  console.log('포맷된 테스트 데이터:', formattedStores);
-  this.populateStoreSelectWithAllOption(formattedStores);
-  this.showAlert('테스트 데이터를 사용 중입니다. 서버 연결을 확인하세요.', 'warning');
-  
-  return formattedStores;
+  return [];
 }
 
       // 대체 URL을 사용하는 폴백 메서드
@@ -871,46 +825,48 @@ async initializeStoreSelectFallback(userId) {
     }
     
     async loadMoreReviewsFromServer() {
-        // 이 메서드는 필요할 때 서버에서 추가 리뷰를 로드하기 위한 것입니다
-        try {
-          // 추가 리뷰 로드를 위한 파라미터 생성
-          const params = this.buildReviewsRequestParams();
-          params.append('page', this.reviewsPage.toString());
-          params.append('limit', this.reviewsPerPage.toString());
-          
-          // 수정된 부분: 올바른 API 엔드포인트 사용
-          const url = `${CONFIG.API_BASE_URL}/reviews?${params.toString()}`;
-          console.log('추가 리뷰 로드 URL:', url);
-          
-          const response = await fetch(url, {
-            headers: {
-              'Authorization': authService.getAuthHeader(),
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (!response.ok) throw new Error('추가 리뷰 데이터 로드 실패');
-          
-          const data = await response.json();
-          
-          // 새 리뷰 병합
-          if (Array.isArray(data.reviews) && data.reviews.length > 0) {
-            this.allReviews = [...this.allReviews, ...data.reviews];
-            this.hasMoreServerData = data.reviews.length >= this.reviewsPerPage;
-          } else {
-            this.hasMoreServerData = false;
+      try {
+        // 추가 리뷰 로드를 위한 파라미터 생성
+        const params = this.buildReviewsRequestParams();
+        params.append('page', this.reviewsPage.toString());
+        params.append('limit', this.reviewsPerPage.toString());
+        
+        // API 엔드포인트 사용
+        const url = `${CONFIG.API_BASE_URL}/reviews?${params.toString()}`;
+        console.log('추가 리뷰 로드 URL:', url);
+        
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': authService.getAuthHeader(),
+            'Content-Type': 'application/json'
           }
-          
-          // 업데이트된 리뷰 표시
-          this.filterAndDisplayReviews();
-          
-        } catch (error) {
-          console.error('추가 리뷰 로드 오류:', error);
-          this.showAlert('추가 리뷰를 로드하는 중 오류가 발생했습니다.');
-        } finally {
-          this.isLoadingMore = false;
+        });
+        
+        if (!response.ok) {
+          throw new Error('추가 리뷰 데이터 로드 실패');
         }
+        
+        const data = await response.json();
+        
+        // 새 리뷰 병합
+        if (Array.isArray(data.reviews) && data.reviews.length > 0) {
+          this.allReviews = [...this.allReviews, ...data.reviews];
+          this.hasMoreServerData = data.reviews.length >= this.reviewsPerPage;
+        } else {
+          this.hasMoreServerData = false;
+        }
+        
+        // 업데이트된 리뷰 표시
+        this.filterAndDisplayReviews();
+        
+      } catch (error) {
+        console.error('추가 리뷰 로드 오류:', error);
+        this.showAlert('추가 리뷰를 로드하는 중 오류가 발생했습니다.', 'error');
+        this.hasMoreServerData = false;
+      } finally {
+        this.isLoadingMore = false;
       }
+    }
     
     // dashboard.js의 buildReviewsRequestParams 함수 수정
     buildReviewsRequestParams() {
@@ -1140,63 +1096,63 @@ async initializeStoreSelectFallback(userId) {
     }
 
     async loadAllStoresStats({ startDate, endDate }, storeCodes) {
-        try {
-            // 통계 데이터만 먼저 로드
-            const statsPromises = storeCodes.map(storeCode => 
-                fetch(`${CONFIG.API_BASE_URL}/stats-details?store_code=${storeCode}&start_date=${this.formatDateForAPI(startDate)}&end_date=${this.formatDateForAPI(endDate)}`, {
-                    headers: {
-                        'Authorization': authService.getAuthHeader(),
-                        'Content-Type': 'application/json'
-                    }
-                }).then(response => {
-                    if (!response.ok) {
-                        console.warn(`매장 ${storeCode} 데이터 조회 실패`);
-                        return null;
-                    }
-                    return response.json();
-                }).catch(error => {
-                    console.error(`매장 ${storeCode} 데이터 오류:`, error);
-                    return null;
-                })
-            );
-            
-            const results = await Promise.all(statsPromises);
-            
-            // 성공한 결과만 필터링
-            const successfulResults = results
-                .filter(result => result !== null)
-                .filter(result => result?.stats?.length > 0 || result?.reviews?.length > 0);
-            
-            if (successfulResults.length === 0) {
-                this.showAlert('데이터가 없습니다', 'warning');
-                this.clearDashboard();
-                this.showLoadingIndicator(false);
-                return;
+      try {
+        // 통계 데이터 가져오기
+        const statsPromises = storeCodes.map(storeCode => 
+          fetch(`${CONFIG.API_BASE_URL}/stats-details?store_code=${storeCode}&start_date=${this.formatDateForAPI(startDate)}&end_date=${this.formatDateForAPI(endDate)}`, {
+            headers: {
+              'Authorization': authService.getAuthHeader(),
+              'Content-Type': 'application/json'
             }
-            
-            // 통계 데이터 병합 및 업데이트
-            const combinedStats = this.combineStatsData(successfulResults);
-            
-            // 통계 정보 업데이트
-            this.updateStats(combinedStats.stats);
-            this.updateChart(combinedStats.stats);
-            
-            // 리뷰 데이터 저장 (첫 페이지)
-            this.allReviews = combinedStats.reviews || [];
-            this.hasMoreServerData = true; // 필요시 서버에서 추가 로드 가능
-            
-            // 리뷰 표시
-            this.filterAndDisplayReviews(true);
-            
-            // 로딩 인디케이터 숨김
-            this.showLoadingIndicator(false);
-            
-        } catch (error) {
-            console.error('전체 통계 로드 오류:', error);
-            this.showAlert('전체 통계를 로드하는 중 오류가 발생했습니다', 'error');
-            this.clearDashboard();
-            this.showLoadingIndicator(false);
+          }).then(response => {
+            if (!response.ok) {
+              console.warn(`매장 ${storeCode} 데이터 조회 실패`);
+              return null;
+            }
+            return response.json();
+          }).catch(error => {
+            console.error(`매장 ${storeCode} 데이터 오류:`, error);
+            return null;
+          })
+        );
+        
+        const results = await Promise.all(statsPromises);
+        
+        // 성공한 결과만 필터링
+        const successfulResults = results
+          .filter(result => result !== null)
+          .filter(result => result?.stats?.length > 0 || result?.reviews?.length > 0);
+        
+        if (successfulResults.length === 0) {
+          this.showAlert('데이터가 없습니다', 'warning');
+          this.clearDashboard();
+          this.showLoadingIndicator(false);
+          return;
         }
+        
+        // 통계 데이터 병합 및 업데이트
+        const combinedStats = this.combineStatsData(successfulResults);
+        
+        // 통계 정보 업데이트
+        this.updateStats(combinedStats.stats);
+        this.updateChart(combinedStats.stats);
+        
+        // 리뷰 데이터 저장 (첫 페이지)
+        this.allReviews = combinedStats.reviews || [];
+        this.hasMoreServerData = true; // 필요시 서버에서 추가 로드 가능
+        
+        // 리뷰 표시
+        this.filterAndDisplayReviews(true);
+        
+        // 로딩 인디케이터 숨김
+        this.showLoadingIndicator(false);
+        
+      } catch (error) {
+        console.error('전체 통계 로드 오류:', error);
+        this.showAlert('통계를 로드하는 중 오류가 발생했습니다', 'error');
+        this.clearDashboard();
+        this.showLoadingIndicator(false);
+      }
     }
 
     combineStatsData(resultsArray) {
@@ -1388,7 +1344,7 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
       if (platform) params.append('platform', platform);
       if (platform_code) params.append('platform_code', platform_code);
       
-      // 수정: 단일 API 경로 사용
+      // API 경로
       const apiPath = `/api/stats_details`;
       
       try {
@@ -1431,223 +1387,16 @@ async loadStoresByDirectMethod(userId, isAdmin = false) {
         
       } catch (error) {
         console.error('통계 데이터 로드 오류:', error.message);
-        
-        // 테스트 데이터로 대체
-        console.log('테스트 데이터로 대체');
-        const mockData = this.generateMockDataWithDates(
-          store_code, 
-          platform_code, 
-          new Date(startDate), 
-          new Date(endDate)
-        );
-        
-        this.updateDashboard(mockData);
-        this.showAlert('서버 연결에 실패하여 테스트 데이터를 표시합니다.', 'warning');
+        this.showAlert('데이터를 불러오는데 실패했습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.', 'error');
+        this.clearDashboard();
       }
     } catch (error) {
       console.error('통계 데이터 로드 중 예외 발생:', error);
-      // 테스트 데이터로 폴백
-      const mockData = this.generateMockData(store_code, platform_code);
-      this.updateDashboard(mockData);
-      this.showAlert('데이터 처리 중 오류가 발생했습니다', 'warning');
+      this.showAlert('데이터 처리 중 오류가 발생했습니다', 'error');
+      this.clearDashboard();
     } finally {
       this.showLoadingIndicator(false);
     }
-  }
-  
-  generateMockDataWithDates(store_code, platform_code, startDate, endDate) {
-    // 날짜 범위 계산
-    const days = [];
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      days.push(new Date(currentDate));
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    // 통계 데이터 생성
-    const stats = days.map(date => {
-      const dateStr = this.formatDateForAPI(date);
-      // 난수 생성으로 각 날짜별 다른 통계 
-      const randomFactor = Math.random() * 0.5 + 0.5; // 0.5~1.0 사이 랜덤값
-      return {
-        review_date: dateStr,
-        store_code: store_code,
-        platform_code: platform_code || '',
-        total_reviews: Math.floor(10 * randomFactor),
-        rating_5_count: Math.floor(5 * randomFactor),
-        rating_4_count: Math.floor(3 * randomFactor),
-        rating_3_count: Math.floor(randomFactor),
-        rating_2_count: Math.floor(randomFactor),
-        rating_1_count: Math.floor(randomFactor * 0.5),
-        boss_reply_count: Math.floor(2 * randomFactor),
-        avg_rating: (4 + Math.random()).toFixed(2)
-      };
-    });
-    
-    // 리뷰 데이터 생성
-    const reviews = [];
-    const names = ['김고객', '이고객', '박고객', '최고객', '정고객'];
-    const contents = [
-      '음식이 정말 맛있어요. 배달도 빨라서 좋았습니다.',
-      '전체적으로 만족스러웠어요. 다음에 또 주문할게요.',
-      '음식은 괜찮았는데 배달이 좀 늦었어요.',
-      '항상 맛있게 먹고 있어요. 단골이 될게요!',
-      '맛있게 잘 먹었습니다. 양이 조금 더 많았으면 좋겠어요.'
-    ];
-    
-    // 각 날짜별로 1~3개의 리뷰 생성
-    days.forEach(date => {
-      const reviewCount = Math.floor(Math.random() * 3) + 1;
-      const dateStr = this.formatDateForAPI(date);
-      
-      for (let i = 0; i < reviewCount; i++) {
-        const hour = Math.floor(Math.random() * 24);
-        const minute = Math.floor(Math.random() * 60);
-        const rating = Math.floor(Math.random() * 5) + 1;
-        const nameIndex = Math.floor(Math.random() * names.length);
-        const contentIndex = Math.floor(Math.random() * contents.length);
-        
-        reviews.push({
-          id: reviews.length + 1,
-          store_code: store_code,
-          platform_code: platform_code || '',
-          review_date: dateStr,
-          created_at: `${dateStr}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00Z`,
-          rating: rating,
-          review_name: names[nameIndex],
-          review_content: contents[contentIndex],
-          boss_reply_needed: Math.random() > 0.5,
-          ai_response: '소중한 리뷰 감사합니다. 더 맛있는 음식으로 보답하겠습니다.'
-        });
-      }
-    });
-    
-    // 리뷰 날짜순 정렬 (최신순)
-    reviews.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    
-    return {
-      stats,
-      reviews,
-      meta: {
-        total_stats: stats.length,
-        total_reviews: reviews.length,
-        needs_boss_reply: reviews.filter(r => r.boss_reply_needed).length
-      }
-    };
-  }
-
-  // 테스트 데이터 생성 함수 추가
-  generateMockData(store_code, platform_code) {
-    return {
-      stats: [
-        {
-          review_date: "2025-03-03",
-          store_code: store_code,
-          platform_code: platform_code || '',
-          total_reviews: 12,
-          rating_5_count: 6,
-          rating_4_count: 4,
-          rating_3_count: 1,
-          rating_2_count: 1,
-          rating_1_count: 0,
-          boss_reply_count: 3,
-          avg_rating: "4.25"
-        },
-        {
-          review_date: "2025-03-02",
-          store_code: store_code,
-          platform_code: platform_code || '',
-          total_reviews: 8,
-          rating_5_count: 4,
-          rating_4_count: 2,
-          rating_3_count: 2,
-          rating_2_count: 0,
-          rating_1_count: 0,
-          boss_reply_count: 1,
-          avg_rating: "4.3"
-        },
-        {
-          review_date: "2025-03-01",
-          store_code: store_code,
-          platform_code: platform_code || '',
-          total_reviews: 10,
-          rating_5_count: 5,
-          rating_4_count: 3,
-          rating_3_count: 1,
-          rating_2_count: 1,
-          rating_1_count: 0,
-          boss_reply_count: 2,
-          avg_rating: "4.2"
-        }
-      ],
-      reviews: [
-        {
-          id: 1,
-          store_code: store_code,
-          platform_code: platform_code || '',
-          review_date: "2025-03-03",
-          created_at: "2025-03-03T15:30:00Z",
-          rating: 5,
-          review_name: "김고객",
-          review_content: "음식이 정말 맛있어요. 배달도 빨라서 좋았습니다.",
-          boss_reply_needed: true,
-          ai_response: "고객님, 소중한 리뷰 감사합니다. 항상 맛있는 음식으로 보답하겠습니다."
-        },
-        {
-          id: 2,
-          store_code: store_code,
-          platform_code: platform_code || '',
-          review_date: "2025-03-03",
-          created_at: "2025-03-03T14:45:00Z",
-          rating: 4,
-          review_name: "이고객",
-          review_content: "전체적으로 만족스러웠어요. 다음에 또 주문할게요.",
-          boss_reply_needed: false,
-          ai_response: "소중한 평가 감사합니다. 더 맛있는 음식으로 찾아뵙겠습니다."
-        },
-        {
-          id: 3,
-          store_code: store_code,
-          platform_code: platform_code || '',
-          review_date: "2025-03-02",
-          created_at: "2025-03-02T19:15:00Z",
-          rating: 3,
-          review_name: "박고객",
-          review_content: "음식은 괜찮았는데 배달이 좀 늦었어요.",
-          boss_reply_needed: true,
-          ai_response: "불편을 드려 죄송합니다. 배달 시간 개선을 위해 노력하겠습니다."
-        },
-        {
-          id: 4,
-          store_code: store_code,
-          platform_code: platform_code || '',
-          review_date: "2025-03-02",
-          created_at: "2025-03-02T12:30:00Z",
-          rating: 5,
-          review_name: "최고객",
-          review_content: "항상 맛있게 먹고 있어요. 단골이 될게요!",
-          boss_reply_needed: false,
-          ai_response: "단골님의 소중한 말씀 감사합니다. 앞으로도 최선을 다하겠습니다."
-        },
-        {
-          id: 5,
-          store_code: store_code,
-          platform_code: platform_code || '',
-          review_date: "2025-03-01",
-          created_at: "2025-03-01T20:10:00Z",
-          rating: 4,
-          review_name: "정고객",
-          review_content: "맛있게 잘 먹었습니다. 양이 조금 더 많았으면 좋겠어요.",
-          boss_reply_needed: true,
-          ai_response: "소중한 의견 감사합니다. 양 조절에 더 신경쓰도록 하겠습니다."
-        }
-      ],
-      meta: {
-        total_stats: 3,
-        total_reviews: 5,
-        needs_boss_reply: 3
-      }
-    };
   }
 
     showAlert(message, type = 'info') {

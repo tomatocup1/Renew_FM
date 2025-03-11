@@ -56,26 +56,6 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // 테스트 토큰 확인 (개발용)
-    if (refresh_token.startsWith('test-refresh-')) {
-      console.log('Test refresh token detected, returning test session');
-      
-      const now = new Date();
-      const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2시간 후 만료
-      
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          session: {
-            access_token: `test-token-${Date.now()}`,
-            refresh_token: `test-refresh-${Date.now()}`,
-            expires_at: expiresAt.toISOString()
-          }
-        })
-      };
-    }
-
     // Supabase를 사용한 토큰 새로고침
     try {
       const { data, error } = await supabase.auth.refreshSession({
