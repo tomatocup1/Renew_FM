@@ -75,27 +75,27 @@ class AuthService {
       try {
         console.log('로그인 시도:', email);
         
-        // API 서버 직접 호출 시도
-        const directApiServerUrl = "https://api.wealthfm.co.kr/auth/signin";
+        // 테스트 계정 체크 제거하고 실제 로그인 먼저 시도
+        
+        // 실제 Netlify 함수로 로그인 시도
+        const netlifyEndpoint = `${window.location.origin}/.netlify/functions/signin`;
+        console.log(`로그인 API 호출: ${netlifyEndpoint}`);
         
         try {
-          console.log(`직접 API 서버 호출 시도: ${directApiServerUrl}`);
-          
-          const response = await fetch(directApiServerUrl, {
+          const response = await fetch(netlifyEndpoint, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Origin': window.location.origin
+              'Accept': 'application/json'
             },
-            credentials: 'include',
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({ email, password }),
+            credentials: 'include'
           });
           
-          console.log(`직접 API 서버 응답 상태:`, response.status);
+          console.log(`로그인 응답 상태:`, response.status);
           
           if (response.ok) {
-            console.log('직접 API 서버 로그인 성공');
+            console.log('로그인 요청 성공');
             const responseData = await response.json();
             
             if (!responseData.session || !responseData.user) {
@@ -110,120 +110,27 @@ class AuthService {
             await this.initTokenRefresh();
             
             return responseData;
-          }
-        } catch (directApiError) {
-          console.warn(`직접 API 서버 호출 실패:`, directApiError);
-          // 직접 API 서버 호출 실패 시 다른 경로 시도
-        }
-        
-        // 여러 API 경로를 시도하기 위한 배열
-        const loginEndpoints = [
-          `${this.API_URL}/signin`,
-          `${window.location.origin}/api/signin`,
-          `https://wealthfm.netlify.app/.netlify/functions/signin`,
-          `${window.location.origin}/.netlify/functions/signin`
-        ];
-        
-        let lastError = null;
-        let response = null;
-        
-        // 모든 가능한 엔드포인트를 순차적으로 시도
-        for (const endpoint of loginEndpoints) {
-          try {
-            console.log(`로그인 API 호출 시도: ${endpoint}`);
-            
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('요청 시간 초과')), 10000)
-            );
-            
-            const fetchPromise = fetch(endpoint, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
-              credentials: 'include',
-              body: JSON.stringify({ email, password })
-            });
-            
-            // 10초 타임아웃 설정
-            response = await Promise.race([fetchPromise, timeoutPromise]);
-            
-            console.log(`로그인 응답 상태:`, response.status);
-            
-            if (response.ok) {
-              console.log('로그인 요청 성공');
-              break; // 성공하면 루프 종료
-            } else {
-              // 502 오류이고 마지막 시도가 아니면 계속 진행
-              if (response.status === 502 || response.status === 504) {
-                console.warn(`${endpoint} 에서 ${response.status} 오류 발생, 다른 경로 시도`);
-                lastError = new Error(`서버 응답 오류 (${response.status})`);
-                continue;
-              }
-              
-              // 다른 HTTP 오류 처리
-              throw new Error(response.status === 401 
-                ? '이메일 또는 비밀번호가 올바르지 않습니다.' 
-                : `로그인에 실패했습니다 (${response.status}). 다시 시도해주세요.`);
+          } else {
+            // 실패 시 오류 메시지 반환
+            if (response.status === 401) {
+              throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.');
             }
-          } catch (endpointError) {
-            console.warn(`${endpoint} 시도 중 오류:`, endpointError);
-            lastError = endpointError;
-            // 네트워크 오류면 다음 엔드포인트 시도
+            throw new Error(`로그인에 실패했습니다 (${response.status}). 다시 시도해주세요.`);
           }
-        }
-        
-        // 모든 시도 실패 시 직접 서버 로그인 시도
-        if (!response || !response.ok) {
-          console.log('모든 Netlify 엔드포인트 시도 실패, 백업 데이터로 로그인 시도');
+        } catch (apiError) {
+          console.error('API 로그인 실패:', apiError);
           
-          // 특정 이메일에 대한 예외 처리 (이 부분은 실제 서버와 연동되기 전까지만 임시로 사용)
-          if (this.isTestAccount(email) || window.enableLoginTestMode) {
-            console.log('테스트 계정으로 재시도');
+          // 오류 상태에서만 테스트 계정 확인
+          if ((this.isTestAccount(email) || window.enableLoginTestMode) && 
+              confirm('실제 로그인 실패. 테스트 모드로 계속하시겠습니까?')) {
+            console.log('사용자 확인 후 테스트 계정으로 로그인');
             return this.createTestSession(email);
           }
           
-          throw lastError || new Error('모든 로그인 시도가 실패했습니다.');
-        }
-        
-        // 응답 데이터 처리
-        try {
-          const responseData = await response.json();
-          console.log('로그인 응답 데이터 수신');
-          
-          if (!responseData.session || !responseData.user) {
-            throw new Error('서버에서 올바른 세션 정보를 받지 못했습니다.');
-          }
-          
-          // 세션 및 사용자 정보 저장
-          this.setSession(responseData.session);
-          this.setUser(responseData.user);
-          
-          // 토큰 갱신 타이머 설정
-          await this.initTokenRefresh();
-          
-          return responseData;
-        } catch (parseError) {
-          console.error('응답 데이터 파싱 오류:', parseError);
-          
-          // 응답은 성공했지만 JSON 파싱 실패 시 테스트 계정으로 폴백
-          if (this.isTestAccount(email) || window.enableLoginTestMode) {
-            console.log('JSON 파싱 오류, 테스트 계정으로 폴백');
-            return this.createTestSession(email);
-          }
-          
-          throw new Error('서버 응답 형식이 잘못되었습니다. 관리자에게 문의하세요.');
+          throw apiError;
         }
       } catch (error) {
         console.error('로그인 처리 중 예외 발생:', error);
-        
-        // 테스트 모드가 활성화된 경우 (옵션)
-        if (this.isTestAccount(email) || window.enableLoginTestMode) {
-          console.log('예외 발생 - 테스트 계정으로 재시도');
-          return this.createTestSession(email);
-        }
-        
         throw error;
       }
     }
