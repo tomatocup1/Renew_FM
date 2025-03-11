@@ -15,6 +15,13 @@ const headers = {
 };
 
 exports.handler = async (event, context) => {
+    // 요청 로깅 추가
+    console.log('Signin function called with:', {
+      httpMethod: event.httpMethod,
+      path: event.path,
+      headers: Object.keys(event.headers),
+      body: event.body ? '존재함' : '없음',
+    });
   // OPTIONS 요청 처리 (CORS preflight)
   if (event.httpMethod === 'OPTIONS') {
     return {
